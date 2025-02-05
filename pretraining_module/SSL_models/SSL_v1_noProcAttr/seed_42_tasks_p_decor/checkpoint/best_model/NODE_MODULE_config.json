@@ -1,0 +1,11 @@
+{
+    "encoder_args": {
+        "activation": "prelu",
+        "embedding_size": 256,
+        "inner_conv_normalize": false,
+        "max_bp_iter": 3,
+        "num_node_features": 2,
+        "weight_init": true
+    },
+    "encoder_type": "FINDER_encoder_PyG"
+}

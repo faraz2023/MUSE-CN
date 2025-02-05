@@ -1,0 +1,260 @@
+[01/17/2025 18:31:18] {pretrain_model.py:314} INFO - Initializing Data..
+[01/17/2025 18:31:18] {pretrain_model.py:319} INFO - Initializing Model..
+[01/17/2025 18:31:18] {pretrain_model.py:353} INFO - Number of model parameters: 1322788
+[01/17/2025 18:31:18] {pretrain_model.py:359} INFO - MEGA CONFIG:  {
+  "embedding_size": 256,
+  "activation": "prelu",
+  "weight_init": true,
+  "num_node_features": 2,
+  "max_bp_iter": 3,
+  "inner_conv_normalize": false
+}
+[01/17/2025 18:31:18] {pretrain_model.py:365} INFO - Number of model parameters in big_model: 262657
+[01/17/2025 18:31:18] {pretrain_model.py:370} INFO - Number of model parameters for link prediction: 132097
+[01/17/2025 18:31:18] {pretrain_model.py:374} INFO - Number of model parameters for discriminator: 65536
+[01/17/2025 18:31:18] {pretrain_model.py:378} INFO - Number of model parameters for minsg: 262912
+[01/17/2025 18:31:18] {pretrain_model.py:381} INFO - Num params in decor: 0
+[01/17/2025 18:31:18] {pretrain_model.py:386} INFO - Number of model parameters for reconstruction: 66050
+[01/17/2025 18:31:18] {pretrain_model.py:397} INFO - Start training
+[01/17/2025 18:31:18] {pretrain_model.py:75} INFO - Not using Pareto MTL.
+[01/17/2025 18:31:20] {pretrain_model.py:214} INFO - New best loss: 0.6930871605873108 at step 1
+[01/17/2025 18:31:20] {pretrain_model.py:257} INFO - 1 / 10001 |train loss: 0.001 |p_link loss: 0.001 |lr: 0.00005
+[01/17/2025 18:31:20] {pretrain_model.py:214} INFO - New best loss: 0.6929342150688171 at step 2
+[01/17/2025 18:31:20] {pretrain_model.py:257} INFO - 2 / 10001 |train loss: 0.001 |p_link loss: 0.001 |lr: 0.00005
+[01/17/2025 18:31:20] {pretrain_model.py:214} INFO - New best loss: 0.6927779912948608 at step 7
+[01/17/2025 18:31:20] {pretrain_model.py:257} INFO - 7 / 10001 |train loss: 0.003 |p_link loss: 0.003 |lr: 0.00005
+[01/17/2025 18:31:20] {pretrain_model.py:214} INFO - New best loss: 0.69268798828125 at step 12
+[01/17/2025 18:31:20] {pretrain_model.py:257} INFO - 12 / 10001 |train loss: 0.003 |p_link loss: 0.003 |lr: 0.00005
+[01/17/2025 18:31:20] {pretrain_model.py:214} INFO - New best loss: 0.6926739811897278 at step 15
+[01/17/2025 18:31:20] {pretrain_model.py:257} INFO - 15 / 10001 |train loss: 0.002 |p_link loss: 0.002 |lr: 0.00005
+[01/17/2025 18:31:20] {pretrain_model.py:214} INFO - New best loss: 0.6925632357597351 at step 17
+[01/17/2025 18:31:20] {pretrain_model.py:257} INFO - 17 / 10001 |train loss: 0.001 |p_link loss: 0.001 |lr: 0.00005
+[01/17/2025 18:31:20] {pretrain_model.py:214} INFO - New best loss: 0.6921934485435486 at step 20
+[01/17/2025 18:31:20] {pretrain_model.py:257} INFO - 20 / 10001 |train loss: 0.002 |p_link loss: 0.002 |lr: 0.00005
+[01/17/2025 18:31:21] {pretrain_model.py:214} INFO - New best loss: 0.6920598149299622 at step 25
+[01/17/2025 18:31:21] {pretrain_model.py:257} INFO - 25 / 10001 |train loss: 0.003 |p_link loss: 0.003 |lr: 0.00005
+[01/17/2025 18:31:21] {pretrain_model.py:214} INFO - New best loss: 0.6917887330055237 at step 29
+[01/17/2025 18:31:21] {pretrain_model.py:257} INFO - 29 / 10001 |train loss: 0.003 |p_link loss: 0.003 |lr: 0.00005
+[01/17/2025 18:31:21] {pretrain_model.py:214} INFO - New best loss: 0.6911455988883972 at step 33
+[01/17/2025 18:31:21] {pretrain_model.py:257} INFO - 33 / 10001 |train loss: 0.003 |p_link loss: 0.003 |lr: 0.00005
+[01/17/2025 18:31:21] {pretrain_model.py:214} INFO - New best loss: 0.6908761858940125 at step 36
+[01/17/2025 18:31:21] {pretrain_model.py:257} INFO - 36 / 10001 |train loss: 0.002 |p_link loss: 0.002 |lr: 0.00005
+[01/17/2025 18:31:21] {pretrain_model.py:214} INFO - New best loss: 0.6907919049263 at step 40
+[01/17/2025 18:31:21] {pretrain_model.py:257} INFO - 40 / 10001 |train loss: 0.003 |p_link loss: 0.003 |lr: 0.00005
+[01/17/2025 18:31:22] {pretrain_model.py:214} INFO - New best loss: 0.6888605356216431 at step 44
+[01/17/2025 18:31:22] {pretrain_model.py:257} INFO - 44 / 10001 |train loss: 0.003 |p_link loss: 0.003 |lr: 0.00005
+[01/17/2025 18:31:22] {pretrain_model.py:214} INFO - New best loss: 0.6887125968933105 at step 49
+[01/17/2025 18:31:22] {pretrain_model.py:257} INFO - 49 / 10001 |train loss: 0.003 |p_link loss: 0.003 |lr: 0.00005
+[01/17/2025 18:31:22] {pretrain_model.py:214} INFO - New best loss: 0.6882558465003967 at step 51
+[01/17/2025 18:31:22] {pretrain_model.py:257} INFO - 51 / 10001 |train loss: 0.001 |p_link loss: 0.001 |lr: 0.00005
+[01/17/2025 18:31:22] {pretrain_model.py:214} INFO - New best loss: 0.6882462501525879 at step 53
+[01/17/2025 18:31:22] {pretrain_model.py:257} INFO - 53 / 10001 |train loss: 0.001 |p_link loss: 0.001 |lr: 0.00005
+[01/17/2025 18:31:22] {pretrain_model.py:214} INFO - New best loss: 0.6854482889175415 at step 62
+[01/17/2025 18:31:22] {pretrain_model.py:257} INFO - 62 / 10001 |train loss: 0.006 |p_link loss: 0.006 |lr: 0.00005
+[01/17/2025 18:31:22] {pretrain_model.py:214} INFO - New best loss: 0.6837016940116882 at step 66
+[01/17/2025 18:31:22] {pretrain_model.py:257} INFO - 66 / 10001 |train loss: 0.003 |p_link loss: 0.003 |lr: 0.00005
+[01/17/2025 18:31:23] {pretrain_model.py:214} INFO - New best loss: 0.6832404136657715 at step 74
+[01/17/2025 18:31:23] {pretrain_model.py:257} INFO - 74 / 10001 |train loss: 0.006 |p_link loss: 0.006 |lr: 0.00005
+[01/17/2025 18:31:23] {pretrain_model.py:214} INFO - New best loss: 0.6823155879974365 at step 92
+[01/17/2025 18:31:23] {pretrain_model.py:257} INFO - 92 / 10001 |train loss: 0.012 |p_link loss: 0.012 |lr: 0.00005
+[01/17/2025 18:31:24] {pretrain_model.py:214} INFO - New best loss: 0.6805447936058044 at step 94
+[01/17/2025 18:31:24] {pretrain_model.py:257} INFO - 94 / 10001 |train loss: 0.001 |p_link loss: 0.001 |lr: 0.00005
+[01/17/2025 18:31:24] {pretrain_model.py:207} INFO - Train loss at step 100: 0.6854532361030579
+[01/17/2025 18:31:24] {pretrain_model.py:214} INFO - New best loss: 0.6784589886665344 at step 102
+[01/17/2025 18:31:24] {pretrain_model.py:257} INFO - 102 / 10001 |train loss: 0.005 |p_link loss: 0.005 |lr: 0.00005
+[01/17/2025 18:31:25] {pretrain_model.py:214} INFO - New best loss: 0.6684627532958984 at step 118
+[01/17/2025 18:31:25] {pretrain_model.py:257} INFO - 118 / 10001 |train loss: 0.011 |p_link loss: 0.011 |lr: 0.00005
+[01/17/2025 18:31:25] {pretrain_model.py:214} INFO - New best loss: 0.6643818020820618 at step 131
+[01/17/2025 18:31:25] {pretrain_model.py:257} INFO - 131 / 10001 |train loss: 0.009 |p_link loss: 0.009 |lr: 0.00005
+[01/17/2025 18:31:26] {pretrain_model.py:214} INFO - New best loss: 0.6643750071525574 at step 158
+[01/17/2025 18:31:26] {pretrain_model.py:257} INFO - 158 / 10001 |train loss: 0.018 |p_link loss: 0.018 |lr: 0.00005
+[01/17/2025 18:31:26] {pretrain_model.py:214} INFO - New best loss: 0.6584803462028503 at step 161
+[01/17/2025 18:31:26] {pretrain_model.py:257} INFO - 161 / 10001 |train loss: 0.002 |p_link loss: 0.002 |lr: 0.00005
+[01/17/2025 18:31:28] {pretrain_model.py:214} INFO - New best loss: 0.6533506512641907 at step 192
+[01/17/2025 18:31:28] {pretrain_model.py:257} INFO - 192 / 10001 |train loss: 0.021 |p_link loss: 0.021 |lr: 0.00005
+[01/17/2025 18:31:28] {pretrain_model.py:214} INFO - New best loss: 0.6492315530776978 at step 196
+[01/17/2025 18:31:28] {pretrain_model.py:257} INFO - 196 / 10001 |train loss: 0.003 |p_link loss: 0.003 |lr: 0.00005
+[01/17/2025 18:31:28] {pretrain_model.py:207} INFO - Train loss at step 200: 0.6628739237785339
+[01/17/2025 18:31:28] {pretrain_model.py:214} INFO - New best loss: 0.636111855506897 at step 205
+[01/17/2025 18:31:28] {pretrain_model.py:257} INFO - 205 / 10001 |train loss: 0.006 |p_link loss: 0.006 |lr: 0.00005
+[01/17/2025 18:31:29] {pretrain_model.py:214} INFO - New best loss: 0.6354188919067383 at step 216
+[01/17/2025 18:31:29] {pretrain_model.py:257} INFO - 216 / 10001 |train loss: 0.007 |p_link loss: 0.007 |lr: 0.00005
+[01/17/2025 18:31:30] {pretrain_model.py:214} INFO - New best loss: 0.6199389100074768 at step 241
+[01/17/2025 18:31:30] {pretrain_model.py:257} INFO - 241 / 10001 |train loss: 0.016 |p_link loss: 0.016 |lr: 0.00005
+[01/17/2025 18:31:30] {pretrain_model.py:214} INFO - New best loss: 0.6178380846977234 at step 257
+[01/17/2025 18:31:30] {pretrain_model.py:257} INFO - 257 / 10001 |train loss: 0.010 |p_link loss: 0.010 |lr: 0.00005
+[01/17/2025 18:31:31] {pretrain_model.py:214} INFO - New best loss: 0.6068094372749329 at step 274
+[01/17/2025 18:31:31] {pretrain_model.py:257} INFO - 274 / 10001 |train loss: 0.011 |p_link loss: 0.011 |lr: 0.00005
+[01/17/2025 18:31:32] {pretrain_model.py:214} INFO - New best loss: 0.5965208411216736 at step 297
+[01/17/2025 18:31:32] {pretrain_model.py:257} INFO - 297 / 10001 |train loss: 0.015 |p_link loss: 0.015 |lr: 0.00005
+[01/17/2025 18:31:32] {pretrain_model.py:207} INFO - Train loss at step 300: 0.6595057845115662
+[01/17/2025 18:31:32] {pretrain_model.py:214} INFO - New best loss: 0.5921845436096191 at step 301
+[01/17/2025 18:31:32] {pretrain_model.py:257} INFO - 301 / 10001 |train loss: 0.003 |p_link loss: 0.003 |lr: 0.00005
+[01/17/2025 18:31:32] {pretrain_model.py:214} INFO - New best loss: 0.565937876701355 at step 310
+[01/17/2025 18:31:32] {pretrain_model.py:257} INFO - 310 / 10001 |train loss: 0.006 |p_link loss: 0.006 |lr: 0.00005
+[01/17/2025 18:31:34] {pretrain_model.py:214} INFO - New best loss: 0.5600801110267639 at step 351
+[01/17/2025 18:31:34] {pretrain_model.py:257} INFO - 351 / 10001 |train loss: 0.025 |p_link loss: 0.025 |lr: 0.00005
+[01/17/2025 18:31:34] {pretrain_model.py:214} INFO - New best loss: 0.5386685729026794 at step 357
+[01/17/2025 18:31:34] {pretrain_model.py:257} INFO - 357 / 10001 |train loss: 0.004 |p_link loss: 0.004 |lr: 0.00005
+[01/17/2025 18:31:35] {pretrain_model.py:214} INFO - New best loss: 0.5067103505134583 at step 364
+[01/17/2025 18:31:35] {pretrain_model.py:257} INFO - 364 / 10001 |train loss: 0.004 |p_link loss: 0.004 |lr: 0.00005
+[01/17/2025 18:31:36] {pretrain_model.py:207} INFO - Train loss at step 400: 0.6452583074569702
+[01/17/2025 18:31:37] {pretrain_model.py:214} INFO - New best loss: 0.47829970717430115 at step 406
+[01/17/2025 18:31:37] {pretrain_model.py:257} INFO - 406 / 10001 |train loss: 0.025 |p_link loss: 0.025 |lr: 0.00005
+[01/17/2025 18:31:39] {pretrain_model.py:214} INFO - New best loss: 0.44296279549598694 at step 473
+[01/17/2025 18:31:39] {pretrain_model.py:257} INFO - 473 / 10001 |train loss: 0.039 |p_link loss: 0.039 |lr: 0.00005
+[01/17/2025 18:31:40] {pretrain_model.py:207} INFO - Train loss at step 500: 0.5994219183921814
+[01/17/2025 18:31:41] {pretrain_model.py:214} INFO - New best loss: 0.4167589247226715 at step 506
+[01/17/2025 18:31:41] {pretrain_model.py:257} INFO - 506 / 10001 |train loss: 0.020 |p_link loss: 0.020 |lr: 0.00005
+[01/17/2025 18:31:43] {pretrain_model.py:214} INFO - New best loss: 0.4133025109767914 at step 558
+[01/17/2025 18:31:43] {pretrain_model.py:257} INFO - 558 / 10001 |train loss: 0.029 |p_link loss: 0.029 |lr: 0.00005
+[01/17/2025 18:31:45] {pretrain_model.py:207} INFO - Train loss at step 600: 0.5691797733306885
+[01/17/2025 18:31:48] {pretrain_model.py:214} INFO - New best loss: 0.37518319487571716 at step 690
+[01/17/2025 18:31:48] {pretrain_model.py:257} INFO - 690 / 10001 |train loss: 0.071 |p_link loss: 0.071 |lr: 0.00005
+[01/17/2025 18:31:49] {pretrain_model.py:207} INFO - Train loss at step 700: 0.6280766129493713
+[01/17/2025 18:31:49] {pretrain_model.py:214} INFO - New best loss: 0.3665164113044739 at step 718
+[01/17/2025 18:31:50] {pretrain_model.py:257} INFO - 718 / 10001 |train loss: 0.015 |p_link loss: 0.015 |lr: 0.00005
+[01/17/2025 18:31:53] {pretrain_model.py:214} INFO - New best loss: 0.3504512906074524 at step 795
+[01/17/2025 18:31:53] {pretrain_model.py:257} INFO - 795 / 10001 |train loss: 0.040 |p_link loss: 0.040 |lr: 0.00005
+[01/17/2025 18:31:53] {pretrain_model.py:214} INFO - New best loss: 0.3402763307094574 at step 798
+[01/17/2025 18:31:53] {pretrain_model.py:257} INFO - 798 / 10001 |train loss: 0.001 |p_link loss: 0.001 |lr: 0.00005
+[01/17/2025 18:31:53] {pretrain_model.py:207} INFO - Train loss at step 800: 0.4135017991065979
+[01/17/2025 18:31:56] {pretrain_model.py:214} INFO - New best loss: 0.33146315813064575 at step 865
+[01/17/2025 18:31:56] {pretrain_model.py:257} INFO - 865 / 10001 |train loss: 0.035 |p_link loss: 0.035 |lr: 0.00005
+[01/17/2025 18:31:57] {pretrain_model.py:207} INFO - Train loss at step 900: 0.47854897379875183
+[01/17/2025 18:31:58] {pretrain_model.py:214} INFO - New best loss: 0.3255632817745209 at step 919
+[01/17/2025 18:31:58] {pretrain_model.py:257} INFO - 919 / 10001 |train loss: 0.026 |p_link loss: 0.026 |lr: 0.00005
+[01/17/2025 18:32:00] {pretrain_model.py:214} INFO - New best loss: 0.30944204330444336 at step 960
+[01/17/2025 18:32:00] {pretrain_model.py:257} INFO - 960 / 10001 |train loss: 0.021 |p_link loss: 0.021 |lr: 0.00005
+[01/17/2025 18:32:01] {pretrain_model.py:207} INFO - Train loss at step 1000: 0.4815571904182434
+[01/17/2025 18:32:02] {pretrain_model.py:214} INFO - New best loss: 0.2638164758682251 at step 1022
+[01/17/2025 18:32:02] {pretrain_model.py:257} INFO - 1022 / 10001 |train loss: 0.031 |p_link loss: 0.031 |lr: 0.00005
+[01/17/2025 18:32:03] {pretrain_model.py:214} INFO - New best loss: 0.253549188375473 at step 1037
+[01/17/2025 18:32:03] {pretrain_model.py:257} INFO - 1037 / 10001 |train loss: 0.007 |p_link loss: 0.007 |lr: 0.00005
+[01/17/2025 18:32:05] {pretrain_model.py:207} INFO - Train loss at step 1100: 0.4904199540615082
+[01/17/2025 18:32:10] {pretrain_model.py:207} INFO - Train loss at step 1200: 0.38492119312286377
+[01/17/2025 18:32:14] {pretrain_model.py:207} INFO - Train loss at step 1300: 0.4457400441169739
+[01/17/2025 18:32:18] {pretrain_model.py:207} INFO - Train loss at step 1400: 0.4252825677394867
+[01/17/2025 18:32:22] {pretrain_model.py:207} INFO - Train loss at step 1500: 0.36154335737228394
+[01/17/2025 18:32:23] {pretrain_model.py:214} INFO - New best loss: 0.241366907954216 at step 1520
+[01/17/2025 18:32:23] {pretrain_model.py:257} INFO - 1520 / 10001 |train loss: 0.228 |p_link loss: 0.228 |lr: 0.00005
+[01/17/2025 18:32:27] {pretrain_model.py:207} INFO - Train loss at step 1600: 0.49692589044570923
+[01/17/2025 18:32:27] {pretrain_model.py:214} INFO - New best loss: 0.21012656390666962 at step 1606
+[01/17/2025 18:32:27] {pretrain_model.py:257} INFO - 1606 / 10001 |train loss: 0.039 |p_link loss: 0.039 |lr: 0.00005
+[01/17/2025 18:32:31] {pretrain_model.py:207} INFO - Train loss at step 1700: 0.5059146285057068
+[01/17/2025 18:32:35] {pretrain_model.py:207} INFO - Train loss at step 1800: 0.40604883432388306
+[01/17/2025 18:32:39] {pretrain_model.py:207} INFO - Train loss at step 1900: 0.32169896364212036
+[01/17/2025 18:32:43] {pretrain_model.py:207} INFO - Train loss at step 2000: 0.5057594180107117
+[01/17/2025 18:32:48] {pretrain_model.py:207} INFO - Train loss at step 2100: 0.40464553236961365
+[01/17/2025 18:32:52] {pretrain_model.py:207} INFO - Train loss at step 2200: 0.33593836426734924
+[01/17/2025 18:32:56] {pretrain_model.py:207} INFO - Train loss at step 2300: 0.6523380279541016
+[01/17/2025 18:32:57] {pretrain_model.py:214} INFO - New best loss: 0.1965455263853073 at step 2328
+[01/17/2025 18:32:57] {pretrain_model.py:257} INFO - 2328 / 10001 |train loss: 0.307 |p_link loss: 0.307 |lr: 0.00005
+[01/17/2025 18:32:59] {pretrain_model.py:214} INFO - New best loss: 0.1466459035873413 at step 2363
+[01/17/2025 18:32:59] {pretrain_model.py:257} INFO - 2363 / 10001 |train loss: 0.014 |p_link loss: 0.014 |lr: 0.00005
+[01/17/2025 18:33:00] {pretrain_model.py:207} INFO - Train loss at step 2400: 0.2746405601501465
+[01/17/2025 18:33:05] {pretrain_model.py:207} INFO - Train loss at step 2500: 0.31664907932281494
+[01/17/2025 18:33:09] {pretrain_model.py:207} INFO - Train loss at step 2600: 0.4806416630744934
+[01/17/2025 18:33:13] {pretrain_model.py:207} INFO - Train loss at step 2700: 0.4431307017803192
+[01/17/2025 18:33:17] {pretrain_model.py:207} INFO - Train loss at step 2800: 0.43058162927627563
+[01/17/2025 18:33:21] {pretrain_model.py:207} INFO - Train loss at step 2900: 0.32411500811576843
+[01/17/2025 18:33:26] {pretrain_model.py:207} INFO - Train loss at step 3000: 0.3918689489364624
+[01/17/2025 18:33:30] {pretrain_model.py:207} INFO - Train loss at step 3100: 0.5417703986167908
+[01/17/2025 18:33:34] {pretrain_model.py:207} INFO - Train loss at step 3200: 0.2933083474636078
+[01/17/2025 18:33:38] {pretrain_model.py:207} INFO - Train loss at step 3300: 0.36282944679260254
+[01/17/2025 18:33:42] {pretrain_model.py:214} INFO - New best loss: 0.1389140635728836 at step 3387
+[01/17/2025 18:33:42] {pretrain_model.py:257} INFO - 3387 / 10001 |train loss: 0.399 |p_link loss: 0.399 |lr: 0.00005
+[01/17/2025 18:33:42] {pretrain_model.py:207} INFO - Train loss at step 3400: 0.3754936754703522
+[01/17/2025 18:33:47] {pretrain_model.py:207} INFO - Train loss at step 3500: 0.6344224214553833
+[01/17/2025 18:33:51] {pretrain_model.py:207} INFO - Train loss at step 3600: 0.315462201833725
+[01/17/2025 18:33:55] {pretrain_model.py:207} INFO - Train loss at step 3700: 0.27228885889053345
+[01/17/2025 18:33:59] {pretrain_model.py:207} INFO - Train loss at step 3800: 0.241237074136734
+[01/17/2025 18:34:04] {pretrain_model.py:207} INFO - Train loss at step 3900: 0.4402494430541992
+[01/17/2025 18:34:08] {pretrain_model.py:207} INFO - Train loss at step 4000: 0.28428977727890015
+[01/17/2025 18:34:12] {pretrain_model.py:207} INFO - Train loss at step 4100: 0.3384953439235687
+[01/17/2025 18:34:16] {pretrain_model.py:207} INFO - Train loss at step 4200: 0.3135240972042084
+[01/17/2025 18:34:17] {pretrain_model.py:214} INFO - New best loss: 0.1379990428686142 at step 4216
+[01/17/2025 18:34:17] {pretrain_model.py:257} INFO - 4216 / 10001 |train loss: 0.308 |p_link loss: 0.308 |lr: 0.00005
+[01/17/2025 18:34:20] {pretrain_model.py:214} INFO - New best loss: 0.132041797041893 at step 4288
+[01/17/2025 18:34:20] {pretrain_model.py:257} INFO - 4288 / 10001 |train loss: 0.027 |p_link loss: 0.027 |lr: 0.00005
+[01/17/2025 18:34:21] {pretrain_model.py:207} INFO - Train loss at step 4300: 0.3409750163555145
+[01/17/2025 18:34:25] {pretrain_model.py:207} INFO - Train loss at step 4400: 0.4171372354030609
+[01/17/2025 18:34:29] {pretrain_model.py:207} INFO - Train loss at step 4500: 0.27921396493911743
+[01/17/2025 18:34:33] {pretrain_model.py:207} INFO - Train loss at step 4600: 0.2475471943616867
+[01/17/2025 18:34:38] {pretrain_model.py:207} INFO - Train loss at step 4700: 0.3434351980686188
+[01/17/2025 18:34:42] {pretrain_model.py:207} INFO - Train loss at step 4800: 0.33823680877685547
+[01/17/2025 18:34:46] {pretrain_model.py:207} INFO - Train loss at step 4900: 0.3901824653148651
+[01/17/2025 18:34:50] {pretrain_model.py:207} INFO - Train loss at step 5000: 0.3020159900188446
+[01/17/2025 18:34:50] {pretrain_model.py:214} INFO - New best loss: 0.3020159900188446 at step 5000
+[01/17/2025 18:34:50] {pretrain_model.py:257} INFO - 5000 / 10001 |train loss: 0.251 |p_link loss: 0.251 |lr: 0.00005
+[01/17/2025 18:34:50] {pretrain_model.py:214} INFO - New best loss: 0.24559040367603302 at step 5001
+[01/17/2025 18:34:50] {pretrain_model.py:257} INFO - 5001 / 10001 |train loss: 0.000 |p_link loss: 0.000 |lr: 0.00005
+[01/17/2025 18:34:51] {pretrain_model.py:214} INFO - New best loss: 0.18410271406173706 at step 5008
+[01/17/2025 18:34:51] {pretrain_model.py:257} INFO - 5008 / 10001 |train loss: 0.002 |p_link loss: 0.002 |lr: 0.00005
+[01/17/2025 18:34:53] {pretrain_model.py:214} INFO - New best loss: 0.18118290603160858 at step 5072
+[01/17/2025 18:34:53] {pretrain_model.py:257} INFO - 5072 / 10001 |train loss: 0.023 |p_link loss: 0.023 |lr: 0.00005
+[01/17/2025 18:34:53] {pretrain_model.py:214} INFO - New best loss: 0.1340474933385849 at step 5076
+[01/17/2025 18:34:53] {pretrain_model.py:257} INFO - 5076 / 10001 |train loss: 0.001 |p_link loss: 0.001 |lr: 0.00005
+[01/17/2025 18:34:54] {pretrain_model.py:207} INFO - Train loss at step 5100: 0.35843682289123535
+[01/17/2025 18:34:59] {pretrain_model.py:207} INFO - Train loss at step 5200: 0.4012317359447479
+[01/17/2025 18:35:03] {pretrain_model.py:207} INFO - Train loss at step 5300: 0.4384699761867523
+[01/17/2025 18:35:07] {pretrain_model.py:207} INFO - Train loss at step 5400: 0.2753673493862152
+[01/17/2025 18:35:11] {pretrain_model.py:207} INFO - Train loss at step 5500: 0.3568270206451416
+[01/17/2025 18:35:15] {pretrain_model.py:207} INFO - Train loss at step 5600: 0.3695644736289978
+[01/17/2025 18:35:20] {pretrain_model.py:207} INFO - Train loss at step 5700: 0.2602289319038391
+[01/17/2025 18:35:24] {pretrain_model.py:207} INFO - Train loss at step 5800: 0.44763684272766113
+[01/17/2025 18:35:28] {pretrain_model.py:207} INFO - Train loss at step 5900: 0.37947139143943787
+[01/17/2025 18:35:32] {pretrain_model.py:207} INFO - Train loss at step 6000: 0.3837481141090393
+[01/17/2025 18:35:37] {pretrain_model.py:207} INFO - Train loss at step 6100: 0.49313315749168396
+[01/17/2025 18:35:41] {pretrain_model.py:207} INFO - Train loss at step 6200: 0.2527824342250824
+[01/17/2025 18:35:41] {pretrain_model.py:214} INFO - New best loss: 0.11114735901355743 at step 6201
+[01/17/2025 18:35:41] {pretrain_model.py:257} INFO - 6201 / 10001 |train loss: 0.377 |p_link loss: 0.377 |lr: 0.00005
+[01/17/2025 18:35:45] {pretrain_model.py:207} INFO - Train loss at step 6300: 0.23697686195373535
+[01/17/2025 18:35:49] {pretrain_model.py:207} INFO - Train loss at step 6400: 0.32604292035102844
+[01/17/2025 18:35:54] {pretrain_model.py:207} INFO - Train loss at step 6500: 0.41992926597595215
+[01/17/2025 18:35:58] {pretrain_model.py:207} INFO - Train loss at step 6600: 0.3268430829048157
+[01/17/2025 18:36:02] {pretrain_model.py:207} INFO - Train loss at step 6700: 0.251707524061203
+[01/17/2025 18:36:06] {pretrain_model.py:207} INFO - Train loss at step 6800: 0.22795872390270233
+[01/17/2025 18:36:11] {pretrain_model.py:207} INFO - Train loss at step 6900: 0.5012772679328918
+[01/17/2025 18:36:15] {pretrain_model.py:207} INFO - Train loss at step 7000: 0.32929953932762146
+[01/17/2025 18:36:16] {pretrain_model.py:214} INFO - New best loss: 0.1042523980140686 at step 7033
+[01/17/2025 18:36:16] {pretrain_model.py:257} INFO - 7033 / 10001 |train loss: 0.264 |p_link loss: 0.264 |lr: 0.00005
+[01/17/2025 18:36:19] {pretrain_model.py:207} INFO - Train loss at step 7100: 0.17624898254871368
+[01/17/2025 18:36:19] {pretrain_model.py:214} INFO - New best loss: 0.10106299072504044 at step 7102
+[01/17/2025 18:36:19] {pretrain_model.py:257} INFO - 7102 / 10001 |train loss: 0.021 |p_link loss: 0.021 |lr: 0.00005
+[01/17/2025 18:36:24] {pretrain_model.py:207} INFO - Train loss at step 7200: 0.2631196975708008
+[01/17/2025 18:36:26] {pretrain_model.py:214} INFO - New best loss: 0.09447910636663437 at step 7262
+[01/17/2025 18:36:26] {pretrain_model.py:257} INFO - 7262 / 10001 |train loss: 0.049 |p_link loss: 0.049 |lr: 0.00005
+[01/17/2025 18:36:28] {pretrain_model.py:207} INFO - Train loss at step 7300: 0.3375522196292877
+[01/17/2025 18:36:32] {pretrain_model.py:207} INFO - Train loss at step 7400: 0.27996841073036194
+[01/17/2025 18:36:36] {pretrain_model.py:207} INFO - Train loss at step 7500: 0.22161173820495605
+[01/17/2025 18:36:41] {pretrain_model.py:207} INFO - Train loss at step 7600: 0.3581629693508148
+[01/17/2025 18:36:45] {pretrain_model.py:207} INFO - Train loss at step 7700: 0.6103397607803345
+[01/17/2025 18:36:49] {pretrain_model.py:207} INFO - Train loss at step 7800: 0.3229292333126068
+[01/17/2025 18:36:53] {pretrain_model.py:207} INFO - Train loss at step 7900: 0.29384031891822815
+[01/17/2025 18:36:58] {pretrain_model.py:207} INFO - Train loss at step 8000: 0.1489591896533966
+[01/17/2025 18:37:02] {pretrain_model.py:207} INFO - Train loss at step 8100: 0.2870098054409027
+[01/17/2025 18:37:06] {pretrain_model.py:207} INFO - Train loss at step 8200: 0.2768726348876953
+[01/17/2025 18:37:10] {pretrain_model.py:214} INFO - New best loss: 0.07545648515224457 at step 8281
+[01/17/2025 18:37:10] {pretrain_model.py:257} INFO - 8281 / 10001 |train loss: 0.308 |p_link loss: 0.308 |lr: 0.00005
+[01/17/2025 18:37:11] {pretrain_model.py:207} INFO - Train loss at step 8300: 0.2958311438560486
+[01/17/2025 18:37:15] {pretrain_model.py:207} INFO - Train loss at step 8400: 0.31410321593284607
+[01/17/2025 18:37:19] {pretrain_model.py:207} INFO - Train loss at step 8500: 0.26749107241630554
+[01/17/2025 18:37:23] {pretrain_model.py:207} INFO - Train loss at step 8600: 0.3154877722263336
+[01/17/2025 18:37:28] {pretrain_model.py:207} INFO - Train loss at step 8700: 0.45340919494628906
+[01/17/2025 18:37:28] {pretrain_model.py:214} INFO - New best loss: 0.07275165617465973 at step 8707
+[01/17/2025 18:37:28] {pretrain_model.py:257} INFO - 8707 / 10001 |train loss: 0.124 |p_link loss: 0.124 |lr: 0.00005
+[01/17/2025 18:37:32] {pretrain_model.py:207} INFO - Train loss at step 8800: 0.17526601254940033
+[01/17/2025 18:37:36] {pretrain_model.py:207} INFO - Train loss at step 8900: 0.38535651564598083
+[01/17/2025 18:37:41] {pretrain_model.py:207} INFO - Train loss at step 9000: 0.26202139258384705
+[01/17/2025 18:37:45] {pretrain_model.py:207} INFO - Train loss at step 9100: 0.17741422355175018
+[01/17/2025 18:37:49] {pretrain_model.py:207} INFO - Train loss at step 9200: 0.31121736764907837
+[01/17/2025 18:37:54] {pretrain_model.py:207} INFO - Train loss at step 9300: 0.27030783891677856
+[01/17/2025 18:37:58] {pretrain_model.py:207} INFO - Train loss at step 9400: 0.451219767332077
+[01/17/2025 18:38:02] {pretrain_model.py:207} INFO - Train loss at step 9500: 0.20631976425647736
+[01/17/2025 18:38:06] {pretrain_model.py:207} INFO - Train loss at step 9600: 0.33435845375061035
+[01/17/2025 18:38:11] {pretrain_model.py:207} INFO - Train loss at step 9700: 0.282867968082428
+[01/17/2025 18:38:15] {pretrain_model.py:207} INFO - Train loss at step 9800: 0.22614102065563202
+[01/17/2025 18:38:19] {pretrain_model.py:207} INFO - Train loss at step 9900: 0.3991025388240814
+[01/17/2025 18:38:24] {pretrain_model.py:207} INFO - Train loss at step 10000: 0.2192559540271759
+[01/17/2025 18:38:24] {pretrain_model.py:408} INFO - Successfully finished training
