@@ -16,12 +16,78 @@ import torch.nn.functional as F
 import numpy as np
 
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+'''
+EXP_CONFIG_PATH = os.path.join("exp_configs", 'SSL_exps')
+# EXPS = ['SW_FINDER_proc_imitation.json', 'SW_FINDER_proc.json']
+# EXPS = ['BA_MC_proc_imitation.json', 'BA_MC_proc.json', 'SW_MC_proc_imitation.json', 'SW_MC_proc.json']
+# EXPS = ['BA_FINDER_proc_SingleLevel.json', 'SW_FINDER_proc_SingleLevel.json']
+
+EXPS = [
+    # "ORIGINAL_DiverseD_FINDER.json",
+    # "MTSSL_MEGA_finetune_DiverseD_FINDER_proc.json",
+    # 'MTSSL_MEGA_finetune_BA_FINDER_proc.json',
+    # 'MTSSL_MEGA_freeze_BA_FINDER_proc.json',
+    # 'BA_FINDER_proc.json', 
+    'ORIGINAL_BA_FINDER.json',
+    # 'MTSSL_freeze_BA_FINDER_proc.json',
+    # 'MTSSL_finetune_BA_FINDER_proc.json',
+    # 'MTSSL_MEGA_BA_FINDER_proc.json'
+    ]
+'''
+
+# EXP_CONFIG_PATH = os.path.join("exp_configs", 'MoE_exps')
+# EXPS = [
+#     'precon_freeze_BA_FINDER_proc.json',
+#     'precon_finetune_BA_FINDER_proc.json',
+#     'plink_freeze_BA_FINDER_proc.json',
+#     'plink_finetune_BA_FINDER_proc.json',
+#     'pming_freeze_BA_FINDER_proc.json',
+#     'pming_finetune_BA_FINDER_proc.json',
+#     'pminsg_freeze_BA_FINDER_proc.json',
+#     'pminsg_finetune_BA_FINDER_proc.json',
+#     'pdecor_freeze_BA_FINDER_proc.json',
+#     'pdecor_finetune_BA_FINDER_proc.json',
+#     'ORIGINAL_BA_FINDER.json',
+
+# ]
+
+# EXP_CONFIG_PATH = os.path.join("exp_configs")
+# EXPS = [
+#     'RealWorld_FINDER_proc.json',
+
+# ]
 
 
 EXP_CONFIG_PATH = os.path.join("exp_configs", 'SSL_exps')
+# EXP_CONFIG_PATH = os.path.join("exp_configs", 'SSL_exps')
 EXPS = [
-    "ORIGINAL_BA_FINDER.json",
-    "MTSSL_MEGA_CrossAttention_freeze_BA_FINDER_noProc.json",
+    # "MTSSL_MEGA_CrossAttention_freeze_BA_FINDER_proc.json",
+    # "MTSSL_MEGA_CrossAttention_finetune_BA_FINDER_proc.json",
+    # "MTSSL_MEGA_CrossAttention_freeze_BA_FINDER_proc.json", 
+    # 'MoE_multitask_finetune_finetune_BA.json',
+
+    # 'MTSSL_MEGA_finetune_BA_FINDER_noProc.json',
+    # 'MTSSL_MEGA_freeze_BA_FINDER_noProc.json',
+    # 'MTSSL_MEGA_finetune_BA_FINDER_proc.json',
+    # 'MTSSL_MEGA_freeze_BA_FINDER_proc.json',
+    
+    # 'MTSSL_MEGA_reset_BA_FINDER_noProc.json'
+    # 'MoE_multitask_finetune_freeze_dedicated_encoder_BA copy'
+
+
+    # "MTSSL_MEGA_CrossAttention_freeze_BA_FINDER_noProc.json",
+    # "MTSSL_MEGA_CrossAttention_finetune_BA_FINDER_noProc.json",
+    # "PlayGround.json"
+
+    # "MTSSL_MEGA_freeze_BA_FINDER_noProc_d128.json",
+    # "ORIGINAL_BA_FINDER_d128.json",
+    # "MTSSL_MEGA_finetune_BA_FINDER_noProc_d128.json",
+    # "MTSSL_MEGA_reset_BA_FINDER_noProc_d128.json",
+
+    # "MTSSL_MEGA_CrossAttention_2l_freeze_BA_FINDER_noProc_d128.json",
+    "MTSSL_MEGA_CrossAttention_4l_freeze_BA_FINDER_noProc_d128.json",
+    "MTSSL_MEGA_CrossAttention_6l_freeze_BA_FINDER_noProc_d128.json",
+
 
 ]
 
@@ -92,6 +158,8 @@ def main(exp_config):
         else:
             print(f"Using pretrained mode, the number of node features to be determined at a later step.")
 
+
+    # exp_config['curriculum'][0]['num_training_iters'] = 1001
     
     agent = Q_CNDP_Agent(exp_config)
 
@@ -103,10 +171,114 @@ def main(exp_config):
     if exp_config["use_wandb"]:
         wandb.finish()
 
+def train_moe_actor_critic(model, env, optimizer, ppo_epochs=4, clip_param=0.2, value_loss_coef=0.5, 
+                          entropy_coef=0.01, max_grad_norm=0.5, num_episodes=1000):
+    """
+    Train the MoE model using PPO
+    """
+    for episode in range(num_episodes):
+        # Storage for episode data
+        states = []
+        actions = []
+        rewards = []
+        values = []
+        action_log_probs = []
+        masks = []
+        
+        # Reset environment
+        state = env.reset()
+        done = False
+        episode_reward = 0
+        
+        while not done:
+            # Get action from policy
+            with torch.no_grad():
+                q_pred, policy, value = model(state)
+                action = policy.multinomial(1)
+                action_log_prob = policy.log().gather(1, action)
+            
+            # Take action in environment
+            next_state, reward, done, _ = env.step(action.item())
+            
+            # Store transition
+            states.append(state)
+            actions.append(action)
+            rewards.append(reward)
+            values.append(value)
+            action_log_probs.append(action_log_prob)
+            masks.append(1 - done)
+            
+            state = next_state
+            episode_reward += reward
+        
+        # Compute returns and advantages
+        returns = compute_returns(rewards, masks, values[-1])
+        advantages = compute_gae(rewards, masks, values)
+        
+        # PPO update
+        for _ in range(ppo_epochs):
+            for state_batch, action_batch, old_log_prob_batch, return_batch, advantage_batch in \
+                ppo_iter(states, actions, action_log_probs, returns, advantages):
+                
+                # Evaluate actions
+                new_log_probs, new_values, entropy = model.evaluate_actions(state_batch, action_batch)
+                
+                # PPO policy loss
+                ratio = torch.exp(new_log_probs - old_log_prob_batch)
+                surr1 = ratio * advantage_batch
+                surr2 = torch.clamp(ratio, 1.0 - clip_param, 1.0 + clip_param) * advantage_batch
+                policy_loss = -torch.min(surr1, surr2).mean()
+                
+                # Value loss
+                value_loss = F.mse_loss(new_values, return_batch)
+                
+                # Total loss
+                loss = policy_loss + value_loss_coef * value_loss - entropy_coef * entropy
+                
+                # Update model
+                optimizer.zero_grad()
+                loss.backward()
+                nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+                optimizer.step()
+        
+        if episode % 10 == 0:
+            print(f"Episode {episode}, Reward: {episode_reward}")
+
+def compute_returns(rewards, masks, last_value, gamma=0.99):
+    returns = []
+    R = last_value
+    for r, mask in zip(reversed(rewards), reversed(masks)):
+        R = r + gamma * R * mask
+        returns.insert(0, R)
+    return returns
+
+def compute_gae(rewards, masks, values, gamma=0.99, tau=0.95):
+    gae = 0
+    advantages = []
+    for r, mask, v, next_v in zip(reversed(rewards), reversed(masks),
+                                 reversed(values[:-1]), reversed(values[1:])):
+        delta = r + gamma * next_v * mask - v
+        gae = delta + gamma * tau * mask * gae
+        advantages.insert(0, gae)
+    return advantages
+
+def ppo_iter(states, actions, log_probs, returns, advantages, batch_size=64):
+    dataset_size = len(states)
+    indices = np.arange(dataset_size)
+    np.random.shuffle(indices)
+    
+    for start_idx in range(0, dataset_size, batch_size):
+        end_idx = start_idx + batch_size
+        batch_indices = indices[start_idx:end_idx]
+        
+        yield (states[batch_indices], actions[batch_indices],
+               log_probs[batch_indices], returns[batch_indices],
+               advantages[batch_indices])
 
 if __name__ == "__main__":
     
     for exp_path in EXPS_PATH:
+        print("Number of experiments: ", len(EXPS_PATH))
         with open(exp_path, 'r') as f:
             exp_config = json.load(f)
         cProfile.run('main(exp_config)', 'profile_stats')

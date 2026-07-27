@@ -113,7 +113,7 @@ class MoE_DQN_simple(nn.Module):
         else:
             raise ValueError("Decoder type not supported")
 
-    def train_forward(self, data):
+    def train_forward(self, data, dtype=torch.float):
         if self.decoder_type == 'basic_mlp_weighted':
             expert_predictions = []
             expert_embeddings = []
@@ -128,7 +128,7 @@ class MoE_DQN_simple(nn.Module):
                 if not expert_params['procedural_attrs']:
                     curr_data['node_input'] = None
 
-                q_pred, cur_message_layer, action_embed = expert_model.train_forward(curr_data, return_action_embed=True)
+                q_pred, cur_message_layer, action_embed = expert_model.train_forward(curr_data, return_action_embed=True, dtype=dtype)
 
                 expert_predictions.append(q_pred)
                 expert_embeddings.append(action_embed)
@@ -163,7 +163,7 @@ class MoE_DQN_simple(nn.Module):
                 expert_params = self.expert_params[expert]
                 if not expert_params['procedural_attrs']:
                     curr_data['node_input'] = None
-                q_pred, cur_message_layer, action_embed = expert_model.train_forward(curr_data, return_action_embed=True)
+                q_pred, cur_message_layer, action_embed = expert_model.train_forward(curr_data, return_action_embed=True, dtype=dtype)
                 expert_predictions.append(q_pred)
 
             expert_predictions = torch.stack(expert_predictions)
@@ -199,7 +199,7 @@ class MoE_DQN_simple(nn.Module):
         else:
             raise ValueError("Decoder type not supported")
     
-    def test_forward(self, data, return_embedding=False):
+    def test_forward(self, data, return_embedding=False, dtype=torch.float):
         if self.decoder_type == 'basic_mlp_weighted':
             expert_predictions = []
             expert_embeddings = []
@@ -214,7 +214,7 @@ class MoE_DQN_simple(nn.Module):
                     curr_data['node_input'] = None
 
 
-                pred, embedding = expert_model.test_forward(curr_data, return_embedding=True)
+                pred, embedding = expert_model.test_forward(curr_data, return_embedding=True, dtype=dtype)
                 expert_embeddings.append(embedding)
                 expert_predictions.append(pred)
 
@@ -251,7 +251,7 @@ class MoE_DQN_simple(nn.Module):
                 expert_params = self.expert_params[expert]
                 if not expert_params['procedural_attrs']:
                     curr_data['node_input'] = None
-                pred, embedding = expert_model.test_forward(curr_data, return_embedding=True)
+                pred, embedding = expert_model.test_forward(curr_data, return_embedding=True, dtype=dtype)
                 expert_predictions.append(pred)
 
             expert_predictions = torch.stack(expert_predictions)  # [num_experts, node_cnt, 1]
@@ -294,11 +294,11 @@ class MoE_DQN_simple(nn.Module):
         else:
             raise ValueError("Decoder type not supported")
         
-    def forward(self, data):
+    def forward(self, data, dtype=torch.float):
         if self.training:
-            return self.train_forward(data)
+            return self.train_forward(data, dtype=dtype)
         else:
-            return self.test_forward(data)
+            return self.test_forward(data, dtype=dtype)
 
 
 class FINDER_DQN(nn.Module):
@@ -337,12 +337,12 @@ class FINDER_DQN(nn.Module):
         self.cross_product = nn.parameter.Parameter(data=self.rand_generator(0, self.w_initialization_std, size=(self.embedding_size, 1)))
 
 
-    def train_forward(self, data, return_action_embed=False):
+    def train_forward(self, data, return_action_embed=False, dtype=torch.float):
 
         action_select = data['action_select']
         aux_input = data['aux_input']
         
-        cur_message_layer,  y_potential = self._forward(data)
+        cur_message_layer,  y_potential = self._forward(data, dtype=dtype)
 
         #[batch_size, node_cnt] * [node_cnt, embed_dim] = [batch_size, embed_dim]
         #OLD action_embed = torch.matmul(action_select, cur_message_layer)
@@ -431,7 +431,7 @@ class FINDER_DQN(nn.Module):
         else:
             return q_pred, cur_message_layer
     
-    def test_forward(self, data, return_embedding=False):
+    def test_forward(self, data, return_embedding=False, dtype=torch.float):
 
         node_input = data['node_input']
         subgsum_param = data['subgsum_param']
@@ -439,7 +439,7 @@ class FINDER_DQN(nn.Module):
         rep_global = data['rep_global']
         aux_input = data['aux_input']
 
-        cur_message_layer,  y_potential = self._forward(data)
+        cur_message_layer,  y_potential = self._forward(data, dtype=dtype)
 
         #print("++++FROM DQN MODULE: shape of y_potential: ", y_potential.shape)
 
@@ -456,8 +456,12 @@ class FINDER_DQN(nn.Module):
         rep_y = torch_sparse.spmm(rep_global['index'], rep_global['value'],\
                     rep_global['m'], rep_global['n'], y_potential)
 
+        
+
         #[[node_cnt, embed_dim], [node_cnt, embed_dim]] = [node_cnt, 2*embed_dim]
         # # [node_cnt, embed_dim, embed_dim]
+        cur_message_layer = cur_message_layer.to(dtype)
+        rep_y = rep_y.to(dtype)
         temp1 = torch.matmul(torch.unsqueeze(cur_message_layer, dim=2),torch.unsqueeze(rep_y, dim=1))
         # [node_cnt embed_dim]
         Shape1 = cur_message_layer.size()
@@ -483,6 +487,7 @@ class FINDER_DQN(nn.Module):
         #if reg_hidden > 0: , [[node_cnt, reg_hidden], [node_cnt, aux_dim]] = [node_cnt, reg_hidden + aux_dim]
         last_output = torch.concat([last_output,rep_aux],1)
 
+        last_output = last_output.to(dtype)
         #if reg_hidden == 0: , [node_cnt, 2 * embed_dim + aux_dim] * [2 * embed_dim + aux_dim, 1] = [node_cnt，1]
         #f reg_hidden > 0: , [node_cnt, reg_hidden + aux_dim] * [reg_hidden + aux_dim, 1] = [node_cnt，1]
         q_on_all = torch.matmul(last_output, self.last_w)
@@ -493,13 +498,72 @@ class FINDER_DQN(nn.Module):
 
 
 
-    def _forward(self, data):
-        cur_message_layer, y_cur_message_layer = self.encoder(data)
+    def test_forward_chunked(self, data, return_embedding=False, dtype=torch.float,
+                             node_chunk_size=20000):
+        """Memory-scalable, *numerically identical* version of test_forward.
+
+        ADDITIVE — does not replace test_forward. The only difference is that the
+        per-node decoder computation (which otherwise materializes a
+        [node_cnt, embed_dim, embed_dim] outer-product tensor — ~419 GB at 1.6M
+        nodes, d=256) is evaluated in node chunks of `node_chunk_size`. The math
+        per node is unchanged, so the output equals test_forward's output.
+
+        Requires the encoder to expose `forward_chunked` (e.g. MEGA_Encoder) so the
+        cross-attention distillation is also chunked; otherwise falls back to the
+        encoder's normal forward (fine for single-encoder FINDER).
+        """
+        subgsum_param = data['subgsum_param']
+        rep_global = data['rep_global']
+        aux_input = data['aux_input']
+
+        # --- encoder (chunked if supported) -> per-node embeddings [n, d] ---
+        if hasattr(self.encoder, 'forward_chunked'):
+            cur_message_layer, y_potential = self.encoder.forward_chunked(
+                data, node_chunk_size=node_chunk_size, dtype=dtype)
+        else:
+            cur_message_layer, y_potential = self._forward(data, dtype=dtype)
+        cur_message_layer = cur_message_layer.to(dtype)
+
+        # broadcast the global ("virtual node") summary to every node: rep_y [n, d]
+        rep_y = torch_sparse.spmm(rep_global['index'], rep_global['value'],
+                                  rep_global['m'], rep_global['n'], y_potential).to(dtype)
+        # per-node auxiliary features: rep_aux [n, aux_dim]
+        rep_aux = torch_sparse.spmm(rep_global['index'], rep_global['value'],
+                                    rep_global['m'], rep_global['n'], aux_input)
+
+        n = cur_message_layer.shape[0]
+        d = cur_message_layer.shape[1]
+        cp = self.cross_product.reshape(1, d, 1)
+
+        q_chunks = []
+        for s in range(0, n, node_chunk_size):
+            e = min(s + node_chunk_size, n)
+            cur_c = cur_message_layer[s:e]                       # [c, d]
+            rep_c = rep_y[s:e]                                   # [c, d]
+            c = cur_c.shape[0]
+            # outer product then contract with cross_product (identical to test_forward)
+            temp1 = torch.matmul(torch.unsqueeze(cur_c, dim=2),
+                                 torch.unsqueeze(rep_c, dim=1))  # [c, d, d]
+            embed_s_a = torch.reshape(
+                torch.matmul(temp1, cp.expand(c, d, 1)), (c, d))  # [c, d]
+            last_output = embed_s_a
+            if self.reg_hidden > 0:
+                last_output = self.act(torch.matmul(embed_s_a, self.h1_weight))
+            last_output = torch.concat([last_output, rep_aux[s:e]], 1).to(dtype)
+            q_chunks.append(torch.matmul(last_output, self.last_w))
+        q_on_all = torch.concat(q_chunks, dim=0)
+
+        if return_embedding:
+            return q_on_all, cur_message_layer
+        return q_on_all
+
+    def _forward(self, data, dtype=torch.float):
+        cur_message_layer, y_cur_message_layer = self.encoder(data, dtype=dtype)
         return cur_message_layer, y_cur_message_layer
     
-    def forward(self, data):
+    def forward(self, data, dtype=torch.float):
         if self.training:
-            return self.train_forward(data)
+            return self.train_forward(data, dtype=dtype)
         else:
-            return self.test_forward(data)
+            return self.test_forward(data, dtype=dtype)
     

@@ -74,7 +74,11 @@ def calc_ANC_score(G, sol, conn_type='pairwise_connectivity', return_scores=Fals
     ANC_score = np.trapz(scores, dx=step_size)
 
     if normalize:
-        ANC_score = ANC_score / len(sol)
+        try:
+            ANC_score = ANC_score / len(sol)
+        except Exception as e:
+            print(f"Error normalizing ANC score: {str(e)}")
+            return ANC_score
 
     if return_scores:
         return ANC_score, scores

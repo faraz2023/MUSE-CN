@@ -1,0 +1,928 @@
+\documentclass{article}
+\usepackage[review]{log_2026}				% anonymous submission to proceedings track
+
+\usepackage{subcaption}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{colortbl}
+\usepackage{xspace}
+\usepackage{xfrac}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{float}
+
+% Tighten default float/text spacing (LoG class doesn't set these; article.cls
+% defaults are ~20pt/12pt/12pt, which adds up across a document this figure/table-dense).
+\setlength{\textfloatsep}{8pt plus 2pt minus 2pt}
+\setlength{\floatsep}{6pt plus 2pt minus 2pt}
+\setlength{\intextsep}{6pt plus 2pt minus 2pt}
+
+% Tighten caption spacing (9 floats -> adds up), no content removed.
+\setlength{\abovecaptionskip}{5pt}
+\setlength{\belowcaptionskip}{1pt}
+
+% Tighten list vertical spacing (contributions, research questions, etc.).
+\setlist{topsep=3pt,itemsep=2pt,parsep=0pt,partopsep=0pt}
+
+% The class uses \flushbottom, which stretches the (glue-based) space above each
+% section title to justify the page -- producing large gaps above headings.
+% \raggedbottom sends that slack to the page bottom instead. Combined with a
+% tight, low-stretch title skip, this visibly cuts the space before each title.
+\raggedbottom
+\usepackage{titlesec}
+\titlespacing*{\section}{0pt}{8pt plus 1pt minus 1pt}{2.5pt}
+\titlespacing*{\subsection}{0pt}{6pt plus 1pt minus 1pt}{2pt}
+
+\usepackage[numbers,compress,sort]{natbib}
+
+\newtheorem{definition}{Definition}
+
+\newcommand{\fk}[1]{\textcolor{blue}{FK:#1}}
+\newcommand{\drev}[1]{\textcolor{teal}{#1}}
+\newcommand{\mv}[1]{\textcolor{red}{#1}}
+
+\newcommand{\pareto}{\texttt{ParetoGNN}\xspace}
+\newcommand{\dgi}{\textsc{DGI}\xspace}
+\newcommand{\autossl}{\textsc{AutoSSL}\xspace}
+\newcommand{\bgrl}{\textsc{BGRL}\xspace}
+\newcommand{\grace}{\textsc{GRACE}\xspace}
+\newcommand{\cca}{\textsc{CCA-SSG}\xspace}
+\newcommand{\gmae}{\textsc{GraphMAE}\xspace}
+\newcommand{\mvgrl}{\textsc{MVGRL}\xspace}
+\newcommand*{\scale}[2][4]{\scalebox{#1}{$#2$}}
+\newcommand{\featrec}{\texttt{FeatRec}\xspace}
+\newcommand{\toporec}{\texttt{TopoRec}\xspace}
+\newcommand{\repdecor}{\texttt{RepDecor}\xspace}
+\newcommand{\ming}{\texttt{MI-NG}\xspace}
+\newcommand{\minsg}{\texttt{MI-NSG}\xspace}
+
+\DeclareMathOperator*{\argmax}{arg\,max}
+
+\title[MUSE-CN: Multi-encoder SSL Expert for Critical Node Detection]{MUSE-CN: MUlti-encoder Self-supervised Expert for learning to identify Critical Nodes in large graphs}
+
+\author[F. Khoshbakhtian et al.]{%
+Faraz Khoshbakhtian\\
+University of Toronto\\
+\email{faraz.khoshbakhtian@mail.utoronto.ca}\And
+Mario Ventresca\\
+Purdue University\\
+\email{mventresca@purdue.edu}\And
+Dionne M. Aleman\\
+University of Toronto\\
+\email{dionne.aleman@utoronto.ca}
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Using machine learning to solve NP-hard combinatorial optimization problems on graphs is an active and promising research frontier. However, empirical evidence suggests that current approaches, such as graph neural networks to learn information-rich node representations on downstream optimization tasks, are often outperformed by simple optimization heuristics. A major limitation in the efficacy of these approaches is the constrained capacity of their graph encoding process. To overcome this challenge we present a multi-encoder graph neural network with cross-attention information distillation paired with a self-supervised multi-task pretraining pipeline that uses synthetically generated data to enhance downstream combinatorial optimization tasks. To demonstrate its effectiveness we develop MUSE-CN, \textbf{MU}lti-encoder \textbf{S}elf-supervised \textbf{E}xpert for learning to identify \textbf{C}ritical \textbf{N}odes, a specialized instantiation of our graph learning framework applied to the NP-hard critical node detection problem, which has real-world applications including logistics, transportation, and biology. Our experiments consider a diverse benchmark of 35 CNDP instances ranging up to web-scale networks with over a million nodes, and we find an overall average improvement of more than 4\% over existing learning-based methods, and approximately 11\% on the 5 largest instances. We conclude that MUSE-CN can outperform both existing learning-based methods and widely used heuristics. Moreover, the generalizability of our approach and the modularity of our implementation enable easy adaptation to other graph-based combinatorial optimization problems. Our code and model weights, including the general-purpose self-supervised module are publicly available\footnote{anonymous repository link: https://anonymous.4open.science/r/MUSE-CN-35AD}.
+\end{abstract}
+
+\section{Introduction}
+
+
+
+Combinatorial optimization problems (COP) constitute a broad class of discrete optimization problems that focus on identifying optimal objects, or sets of objects, from a finite set~\cite{crescenzi1995compendium}. These problems naturally arise in a wide range of real-world applications, including logistics~\cite{yildiz2021express}, transportation~\cite{cappart2023combinatorial}, cybersecurity~\cite{nazir2021novel}, pandemic mitigation~\cite{khoshbakhtian2024optimal}, and drug discovery~\cite{kennedy2008application}, among others. Some of the most well-known COPs include the travelling salesman problem~\cite{gavish1978travelling}, the set covering problem~\cite{caprara2000algorithms}, and the critical node detection problem (CNDP)~\cite{ventresca2014derandomized}.\fk{discuss} Decision problem formulations of COPs tend to be NP-complete~\cite{karp2010reducibility} and thus admit computationally efficient algorithms for evaluating the quality of a candidate solution. For instance, the goal of CNDP is to identify a subset of $k$ critical nodes in a graph (with $n$ total nodes) that are somehow most important to its functionality. Simulating the impact of removing any k-subset of nodes can be accomplished in polynomial time~\cite{fan2020finding}.
+
+%Despite their prevalence, COPs are notoriously difficult to solve. In their seminal work, \citet{karp2010reducibility} demonstrated that most COPs are NP-hard, meaning that no polynomial-time algorithm can guarantee an optimal solution, and exact methods quickly become computationally intractable for large problem instances. 
+
+The intractability of finding guaranteed-optimal solutions in polynomial time has motivated a wide range of heuristic approaches~\cite{misevivcius2004overview}, and more recently, growing interest in using machine learning (ML), particularly graph learning and reinforcement learning (RL), to automatically learn such heuristics, given the ubiquity of COPs and the ease of evaluating candidate solutions.
+
+The application of ML to COPs was initially explored by \citet{khalil2017learning}, who introduced S2V-DQN, a graph neural network (GNN)-based architecture trained via RL to generate heuristic solutions for some COPs such as the travelling salesman problem. S2V-DQN consists of a graph encoder and a value-estimation decoder, jointly trained using the deep Q-learning (DQN) algorithm~\cite{mnih2015human} to predict value estimates for nodes within a graph. Inspired by the success of S2V-DQN, \citet{fan2020finding} proposed FINDER, an adaptation of S2V-DQN specifically designed to address the CNDP, which employs an encoder-decoder architecture trained using DQN to assign criticality scores to graph nodes based on their learned structural properties.
+
+
+Models such as FINDER, and S2V-DQN show great promise in leveraging ML to solve COPs. However, empirical evidence suggests that they can often be outperformed by simple and widely used heuristics (see Table~\ref{tab:anc_main_results}). One major, often overlooked, limitation of current ML-based COP approaches stems from the complexity of the graph encoding process and the absence of robust, information-rich node representations. GNNs are known to suffer from expressivity issues such as over-smoothing and over-squashing~\cite{rusch2023survey,topping2021understanding,xu2018powerful} (see Section~\ref{sec:related_work}). That said, little attention has been given to the graph encoding process itself in ML-based COP solutions.
+
+We argue that advancing the graph encoding process through improved pretraining methods and architecture designs is essential for enhancing the performance of ML-based COP solutions. We propose a novel RL agent built on a self-supervised backbone with a multi-encoder, multi-task GNN architecture that provides high-quality node embeddings for downstream optimization tasks, and apply it to CNDP, an NP-hard COP with significant real-world impact in areas such as cybersecurity~\cite{lalou2018critical}, transportation~\cite{wang2021identification}, and pandemic mitigation~\cite{khoshbakhtian2024optimal}. Our main contributions are:
+
+\begin{itemize}[leftmargin=*]
+    \item \textbf{MUSE-CN}, a novel RL agent built on top of a self-supervised, multi-encoder and multi-task GNN architecture~\cite{khoshbakhtian2024mega} for CNDP.
+
+    \item An \textbf{inter-encoder cross-attention} module that consolidates information from multiple GNN encoders into richer node embeddings.
+
+    \item A \textbf{self-supervised pretraining pipeline} using a large corpus of synthetic graphs to learn robust, general-purpose node representations transferable to any ML-based COP pipeline.
+
+    \item A \textbf{systematic evaluation} of pretraining strategies for learning-based CNDP, showing that MUSE-CN's strategy outperforms existing learning-based methods and widely used heuristics.
+
+    \item \textbf{Open-source release} of our code, model weights (including the general-purpose pretrained graph encoder), and datasets for MUSE-CN to facilitate reproducibility and support future research\footnote{anonymous repository link: https://anonymous.4open.science/r/MUSE-CN-35AD}.
+\end{itemize}
+
+
+
+
+
+
+\section{Preliminaries}
+
+The definitions of terms and notations used in this work are provided below.
+
+\begin{definition}[Pairwise connectivity]
+For a simple graph $G = (V, E)$ (no self-loops or multi-edges), \emph{pairwise connectivity} (PC) is the number of vertex pairs $(v_i, v_j)$, where $v_i, v_j \in V$ and $i \neq j$, that are connected by at least one path. Let $C(G)$ represent the set of connected components in $G$. The pairwise connectivity is computed as the sum of all vertex pairs within each connected component:
+\[
+\text{PC}(G) = \sum_{c \in C(G)} \binom{|c|}{2}
+\]
+\emph{Normalized pairwise connectivity} (NPC) is defined as the fraction of PC relative to the total number of possible vertex pairs in $G$:
+\[
+\text{NPC}(G) = \frac{\text{PC}(G)}{\binom{|V|}{2}}
+\]
+% To compute NPC of residual graph after applying a CNDP solution $S$, we first remove all edges incident to the nodes in $S$ and then calculate NPC on the modified graph. %% ALREADY EXPLAINED BELOW
+\end{definition}
+    
+\begin{definition}[Critical node detection problem]
+Given a simple graph $G = (V, E)$ and a budget $b \in \mathbb{N}$, the \emph{critical node detection problem} (CNDP) involves identifying a subset $S \subseteq V$ with $|S| \leq b$ such that removing $S$ from $G$ minimizes a predefined performance function $\sigma(G')$, where $G' = (V \setminus S, E')$ and $E'$ consists of the edges in $E$ that are not incident to any node in $S$. In this work, we adopt NPC as the network performance function, i.e., $\sigma(G) = \text{NPC}(G)$.
+\end{definition}
+    
+\begin{definition}[Accumulated normalized connectivity]
+ \emph{Accumulated Normalized Connectivity} (ANC) is a metric to assess the robustness of a sequential node removal solution $\left(v_1, v_2, \ldots, v_b\right)$ against a given graph $G=(V, E)$~\cite{fan2020finding,schneider2011mitigation}. ANC can be computed as:
+
+ % how to add a big parenthesis? 
+ \[
+ANC\left(G; v_1, v_2, \ldots, v_b\right) = 100 \times 
+\left(\frac{1}{b} \sum_{k=1}^b \frac{\sigma\left(G \setminus \{v_1, v_2, \ldots, v_k\}\right)}{\sigma(G)}\right)
+\]
+Most CNDP research focuses on minimizing connectivity by removing $b$ nodes simultaneously~\citep{lalou2018critical}, but ANC can provide a more fine-grained evaluation of critical node identification by measuring the cascading impact of node removals on network connectivity. Figure~\ref{fig:anc_example_plt} provides an example of the ANC calculation for a sequential CNDP solution.
+\end{definition}
+
+
+% A 1×3 figure with anc_example_plt 1, 2, and 3
+\begin{figure}[!ht]
+    \vspace{-0.3cm}
+    \centering
+    % First subfigure
+    \begin{subfigure}[b]{0.2\textwidth}
+        \includegraphics[width=\textwidth]{Figs/anc_example_plts/1_new.pdf}
+        \vspace{-0.1cm}
+        \caption{}
+        \label{fig:anc_example_plt_1}
+    \end{subfigure}
+    % Second subfigure
+    % \begin{subfigure}[b]{0.15\textwidth}
+    %     \includegraphics[width=\textwidth]{Figs/anc_example_plts/2.pdf}
+    %     \caption{Plot 2}
+    %     \label{fig:anc_example_plt_2}
+    % \end{subfigure}
+    % Third subfigure
+    \begin{subfigure}[b]{0.24\textwidth}
+        \includegraphics[width=\textwidth,trim={0.6cm 1.2cm 0 0},clip]{Figs/anc_example_plts/3.png}
+        \caption{}
+        \label{fig:anc_example_plt_3}
+    \end{subfigure}
+    \caption{Figure (a) shows an example graph and a potential ordered CNDP solution where red nodes are selected by the solver in the indicated order. Dashed edges are removed by the solution. (b) shows the connectivity curve resulting from applying the solution on the graph. The ANC is computed as the ratio of the gray area to the full box (i.e., idealistically maximum possible connectivity during the attack rollout) and can be represented as a percentage}
+    \label{fig:anc_example_plt}
+\end{figure}
+
+
+\section{Related Work}
+\label{sec:related_work}
+
+
+\paragraph{Graph neural networks:} GNNs learn graph representations via iterative message-passing between connected nodes, a two-step process of neighborhood aggregation and representation update with a strong inductive bias for graph structure~\cite{zhang2019graph,hamilton2020graph}. Following FINDER~\cite{fan2020finding}, we use standard GraphSAGE~\cite{hamilton2017inductive} layers for our encoders with summation aggregation:
+\begin{equation}
+\begin{aligned}
+\mathbf{h}_u^{(k+1)} &= \sigma\left(\mathbf{W}^{(k+1)} \cdot \text{CONCAT}\left(\mathbf{h}_u^{(k)}, \sum_{v \in \mathcal{N}(u)} \mathbf{h}_v^{(k)}\right)\right)
+\end{aligned}
+\end{equation}
+where $\text{CONCAT}$ denotes the concatenation operation, $\sigma$ is the ReLU activation function, $\mathbf{W}^{(k+1)}$ is the learnable weight matrix for the $(k+1)$th layer, and $\cdot$ denotes the tensor multiplication operation.
+
+While effective in learning certain local properties, GNNs often face serious challenges in expressivity~\cite{xu2018powerful}, including: (1) over-smoothing in deep architectures~\cite{rusch2023survey}, which leads to a loss of information in the node representations as the number of layers increases, (2) over-squashing~\cite{topping2021understanding} in large networks, which leads to a loss of information as extended node neighborhood sizes grow exponentially, and (3) theoretical expressivity bounds~\cite{xu2018powerful}, which are message-passing GNNs' limitations in distinguishing between different graph structures. Recent works have attempted to address these issues by employing architectural improvements such as transformers~\cite{rampavsek2022recipe} and multi-encoder designs~\cite{khoshbakhtian2024mega} that enhance the model's ability to capture complex graph structures. Graph transformer approaches can suffer from issues such as scalability for large graphs, or lack of a strong inductive bias for graph structures~\cite{ma2023graph}. Multi-encoder approaches, such as MEGA~\cite{khoshbakhtian2024mega}, can incorporate any encoder architecture, and learn different representations for different tasks to generate multi-purpose node embeddings that could be used for a variety of downstream tasks.
+
+
+
+\paragraph{Self-supervised learning on graphs:} the success of self-supervised learning (SSL) in other ML domains such as vision~\cite{2021baobeit} and language~\cite{radford2019language}, coupled with the abundance of unlabeled graph data, has led to great interest in SSL for graph learning~\cite{khoshbakhtian2024mega,ju2022multi,velivckovicdeep,zhang2021canonical,jin2021automated}. This approach has been shown to be effective for downstream tasks such as node classification and edge prediction~\cite{liu2022graph,velivckovicdeep,khoshbakhtian2024mega,ermolov2021whitening} via tasks like mutual information maximization~\cite{you2020graph}, contrastive learning~\cite{you2020graph}, and feature reconstruction~\cite{hou2022graphmae}. 
+
+The diversity of the graph structures and the complexity of the downstream tasks has drawn attention to graph multi-task self-supervised learning (MT-SSL)~\cite{ju2022multi,khoshbakhtian2024mega,jin2021automated}. An earlier architecture, ParetoGNN~\cite{xu2018powerful}, frames the multi-task learning problem as a multi-objective optimization problem, where a single encoder is trained to optimize multiple tasks toward a Pareto-optimal solution. However, recent works have shown the limitations of multi-objective optimization in mitigating the conflicting gradients problem in multi-task learning~\cite{xin2022current,kurin2022defense}, which in turn can get exacerbated by the limited expressivity of GNNs~\cite{khoshbakhtian2024mega}. A more recent architecture, MEGA~\cite{khoshbakhtian2024mega}, employs a multi-encoder architecture where each encoder is separately trained on a unique SSL task. The representations from the separate encoders are then combined and distilled using principal component analysis (PCA)~\cite{abdi2010principal} to create a single, low-dimensional information-rich representation. The MEGA architecture has shown promising results in mitigating the conflicting gradients problem in multi-task learning and has been shown to outperform single-encoder GNNs on a variety of downstream tasks~\cite{khoshbakhtian2024mega}.
+
+
+\paragraph{Machine learning for combinatorial optimization:}
+
+ML techniques, in particular deep neural networks, have shown promise in solving COPs by learning effective heuristics~\cite{bengio2021machine,cappart2021combining,cappart2023combinatorial}. Unlike traditional optimization routines that rely on hand-designed rules, learning-based approaches can automatically extract problem-specific structures from data, potentially resulting in high-quality solutions with significantly reduced computation times~\cite{khalil2017learning}. This advantage is particularly valuable given that most COPs are \mbox{NP-hard}, making exact solutions computationally intractable for large instances~\cite{karp2010reducibility}.
+
+
+Among learning-based methods for COPs, RL approaches have been particularly popular, as they naturally frame the optimization objective (e.g., solution quality) as a reward signal~\cite{khalil2017learning,fan2020finding,cappart2023combinatorial}. Both S2V-DQN~\cite{khalil2017learning} and FINDER~\cite{fan2020finding} employ value-based RL, learning a Q-function $Q_\theta(s,a)$ that estimates the expected return of taking action $a$ in state $s$. For FINDER, this is the expected long-term connectivity degradation following the removal of node $v$. Our own MDP formalization for CNDP, including the precise reward definition, is given in Section~\ref{sec:muse_cn}.
+
+Both S2V-DQN~\cite{khalil2017learning} and FINDER~\cite{fan2020finding} parametrize $\hat{Q}$ using a GNN-based encoder to produce latent node representations, and then utilizing a decoder (usually a simple multi-layer perceptron (MLP)~\cite{ramchoun2016multilayer}) to map the representations to value estimates for each node. An important advantage of this approach is the inductive nature of the architecture, which allows the models to generalize to unseen graphs. Furthermore, the inductive bias of GNN encoders helps the models generalize from smaller synthetic training graphs to unseen, often much larger real-world networks.
+
+
+Despite their potential, learning-based methods for COPs still lag behind carefully designed, problem-specific heuristics in many cases~\cite{joshi2021learning}. Table~\ref{tab:anc_main_results} shows FINDER~\cite{fan2020finding} is often outperformed by simple degree-based CNDP heuristics. A key challenge is that single-encoder architectures such as S2V-DQN and FINDER struggle with the expressivity issues discussed above, and rely on task-specific reward signals alone, consequently missing opportunities to incorporate general-purpose structural knowledge through SSL. We address both limitations by integrating multi-encoder GNN designs with MT-SSL to enrich node representations and equip our RL agent to more effectively learn the downstream COP.
+
+
+\paragraph{Finding critical nodes:} CNDP is a well-studied NP-hard problem with significant practical applications~\cite{lalou2018critical}; exact solvers only scale to small instances, so a wide range of heuristics have been proposed instead. For larger instances (tens of thousands of nodes and up), CNDP scoring mechanisms are particularly popular~\cite{fan2020finding,morone2016collective,pastor2001epidemic}. Nodes are scored by perceived criticality and greedily removed, either one-shot or iteratively with re-scoring~\cite{fan2020finding}. Widely used scoring mechanisms include degree centrality~\cite{zhang2017degree} and collective influence (CI)~\cite{morone2016collective}; FINDER~\cite{fan2020finding} can also be seen as a learning-based scoring mechanism.
+
+
+
+\section{MUSE-CN}
+\label{sec:muse_cn}
+
+\begin{figure}[!ht]
+    \centering 
+    \includegraphics[width=0.6\columnwidth]{Figs/MUSE_CN_arch.png}
+    \caption{\textbf{MUSE-CN overview.} A multi-encoder MT-SSL GNN~\cite{khoshbakhtian2024mega} is pretrained on synthetic graphs across five SSL tasks (top); the frozen encoders' outputs are then distilled by a cross-attention module and decoded into per-node Q-values, from which the highest-scoring node is iteratively removed (bottom). See Section~\ref{sec:muse_cn} for details.}
+    \label{fig:mega_arch}
+    \vspace{-0.5em}
+
+\end{figure}
+
+
+MUSE-CN leverages MT-SSL pretraining strategies, multi-encoder GNN architectures with a cross-attention module, and a Q-learning training pipeline for learning to identify critical nodes in large graphs. Figure~\ref{fig:mega_arch} provides a visual overview and brief description of the MUSE-CN architecture.
+
+
+\subsection{Multi-encoder architecture and pretraining}
+
+
+A key component of MUSE-CN is the pretrained multi-encoder GNN, which provides the RL optimization agent with rich, multi-purpose node representations at the onset of heuristic learning. Inspired by the success of multi-encoder architectures in MT-SSL~\cite{khoshbakhtian2024mega}, we design a transfer learning pipeline with a multi-encoder GNN pretrained on a diverse set of SSL tasks using a large corpus of synthetic graphs (refer to Appendix~\ref{app:ssl_dataset} for details). Each SSL task is associated with a dedicated task-specific augmentation block, encoder, and decoder, which together compute the task loss and update the encoder weights (see Figure~\ref{fig:mega_arch}). To prevent catastrophic forgetting~\cite{kirkpatrick2017overcoming}, encoder weights are frozen after pretraining, as opposed to fine-tuning (see Tables~\ref{tab:anc_pretraining},~\ref{tab:npc_pretraining} for comparisons of different transfer learning strategies). Instead, we employ a cross-attention module to enable the optimization agent to extract representations from the multi-encoder outputs that are best suited for the downstream optimization task (e.g., CNDP). 
+
+
+%OLD version: The input to the module are stacked node representation ($e \times n \times d$) where $e$ is the number of encoders, $n$ is the number of nodes, and $d$ is the node embedding dimension. We follow the original transformer architecture~\cite{vaswani2017attention} for the cross attention module so the agent is given the opportunity to learn a global and structural relationship among task-specific node representations.
+
+
+Given input graph $G$ with $|V|=n$, MUSE-CN passes $G$ through $e_{num}$ independently parametrized and pretrained encoders $\{e_{\theta^i}\}_{i=1}^{e_{num}}$ to produce high quality SSL task specific representations:
+\[
+H^{(i)} = e_{\theta^i}(G) \in \mathbb{R}^{n \times d}, \quad i=1,\ldots,e_{num}.
+\]
+Then these embeddings are stacked:
+\[
+H \in \mathbb{R}^{e_{num} \times n \times d},
+\]
+where $H$ can be interpreted as a batch with $n$ samples (nodes), $e_{num}$ tokens (one per encoder), and token embedding dimension $d$, so that batched cross-task attention can be applied~\cite{vaswani2017attention}.
+
+
+We then compute the query, key, and value projections for each node across the token dimension. Formally, for each node in the batch, let
+\[
+\mathbf{Q} = H\,\mathbf{W}^Q,\quad \mathbf{K} = H\,\mathbf{W}^K,\quad \mathbf{V} = H\,\mathbf{W}^V,
+\]
+with projection matrices $\mathbf{W}^Q,\mathbf{W}^K,\mathbf{W}^V \in \mathbb{R}^{d \times d}$, so that $\mathbf{Q},\mathbf{K},\mathbf{V} \in \mathbb{R}^{e_{num} \times n \times d}$. The batched scaled dot-product attention is then computed along the token dimension for each node:
+\[
+\text{Attention}(H) = \text{softmax }\!\Biggl(\frac{\mathbf{Q}\mathbf{K}^\top}{\sqrt{d}}\Biggr)\mathbf{V},
+\]
+
+Following the original transformer architecture we employ a multi-head attention mechanism, layer normalization, position-wise feed-forward network, and residual connections to further enrich the representations (refer to Appendix~\ref{app:q_learning_hyperparameters} for implementation details)~\cite{vaswani2017attention}. Using the cross-task attention mechanism helps MUSE-CN to dynamically leverage the expertise of multiple SSL graph encoders and learn cross-task representations that best suit the downstream optimization task.
+
+
+Graph MT-SSL has usually been studied in a transductive setting, where models are trained and evaluated on the same dataset~\cite{khoshbakhtian2024mega,ju2022multi,jin2021automated}. However, given the diverse structural characteristics of real-world networks in CNDP and other COPs, we propose an inductive MT-SSL pretraining framework. Our approach trains models on a large corpus of synthetic graphs, ensuring that learned representations generalize effectively to unseen graphs during downstream optimization. This inductive pretraining mitigates overfitting while promoting robust, transferable representations. We employ five widely used SSL tasks encompassing generative reconstruction, whitening decorrelation, and mutual information maximization~\cite{ju2022multi,khoshbakhtian2024mega}. Formal definitions of these tasks are provided in Appendix~\ref{app:ssl_tasks}, and pretraining hyperparameters are detailed in Appendix~\ref{app:pretraining_hyperparameters}.
+
+
+Inductive inference is a critical requirement enabling the optimization agent to operate on networks of different sizes and structures. During inductive representation generation, each node's representation is independently computed based on information propagated from its local neighborhood~\cite{hamilton2017inductive}. The neighborhood aggregation  mechanism allows the model to be applicable to any input network but may cause the node's representation to lack global information. To encode both the \textit{graph state} and the node’s structural properties, we implement the virtual node addition strategy, as used in FINDER~\cite{fan2020finding}. A virtual node is introduced into the graph and connected to all existing nodes. This virtual node undergoes its own propagation process, capturing a global summary of the network. Then, for each node, the final representation is formed by concatenating the self-propagated embedding with the virtual node embedding. To the best of our knowledge, existing graph MT-SSL frameworks have not utilized this strategy~\cite{khoshbakhtian2024mega,jin2021automated,ju2022multi}. MUSE-CN’s pretraining pipeline incorporates this method to enhance generalization in graph-based COPs.
+
+
+\subsection{Learning to identify critical nodes with Q-learning}
+
+
+Following the success of FINDER~\cite{fan2020finding}, and S2V-DQN~\cite{khalil2017learning}, MUSE-CN employs the DQN algorithm~\cite{mnih2015human} for learning to identify critical nodes. The learning goal can be summarized as learning a $\hat{Q}_\theta$ parameterized by $\theta$ that, given a graph state $s$ and a candidate node $v$, predicts the long-term connectivity degradation following the removal of $v$; or equivalently, the node's criticality score. The choice of DQN algorithm for agent training allows us to conduct a fair comparison with FINDER~\cite{fan2020finding} and highlight the advantages of the MUSE-CN's graph encoding expert.
+
+
+Finding critical nodes (i.e., CNDP) can be formalized as a Markov decision process (MDP):
+% \begin{itemize}
+%     \item \textbf{State ($s$)}: a given graph with a partial solution.
+%     \item \textbf{Action ($a$)}: selecting a node $v$ for addition to the partial solution.
+%     \item \textbf{Reward ($r$)}: the decrease in NPC after removing all remaining edges connected to $v$.
+%     \item \textbf{State Transition ($s \rightarrow s'$)}: the graph updates after isolating and masking $v$ from the graph and the updated solution with $v$ added. The transition is deterministic.
+% \end{itemize}
+\begin{itemize}[leftmargin=*]
+    \item \textbf{State ($s$):} a state is the tuple $s=(G,S)$, where $G=(V,E)$ is the input graph and $S \subseteq V$ is the partial solution. The effective state graph $G_s = (V, E_s)$ retains only edges not touching $S$: $E_s = \{\{u,v\} \in E \mid u,v \notin S\}$. Nodes in $S$ are masked and isolated but remain in $V$ to simplify state management.
+    \item \textbf{Action ($a$):} a greedy policy selects the next node via $a = \argmax_{v \in V\setminus S} Q(s,v)$.
+    \item \textbf{Transition ($T$):} given $a=v$, the next state is $s' = T(s,a) = (G, S \cup \{v\})$: $v$ is isolated from $G_s$ (all its incident edges removed) to obtain $G_{s'} = (V, E_{s'})$.
+    \item \textbf{Reward ($r$):} $r(s,a) = \mathrm{NPC}(G_s) - \mathrm{NPC}(G_{s'})$, the decrease in normalized pairwise connectivity between the two states.
+\end{itemize}
+MUSE-CN sequentially selects nodes based on Q-value estimates and updates the graph state.  The learned Q-function guides node removal by prioritizing those that maximize long-term connectivity degradation. The robustness of an agent on an input graph is measured by the ANC metric, which indicates how quickly the agent is able to disconnect the graph, and the NPC score, which indicates the stationary quality of the final solution given a set budget.
+
+
+
+\paragraph{DQN Training Framework}: MUSE-CN is trained using the standard deep Q-learning algorithm~\cite{mnih2015human}, approximating the optimal action-value function $Q^*(s,a)$ by minimizing a temporal difference loss against a periodically-updated target network. Training is stabilized with an experience replay buffer and $n$-step TD learning~\cite{sutton2018reinforcement}, and exploration follows a standard $\epsilon$-greedy schedule with exponential decay. These choices follow standard DQN practice~\cite{mnih2015human,sutton2018reinforcement}; full training equations are provided in Appendix~\ref{app:dqn_framework} for completeness.
+
+The Q-network used in MUSE-CN consists of a graph encoder and a decoder. The graph encoder has been described previously, while the decoder follows the same structure as FINDER~\cite{fan2020finding} to ensure fair comparison (see Appendix~\ref{app:q_learning_hyperparameters} for implementation details). In deployment, MUSE-CN decodes solutions autoregressively, iteratively selecting and removing the highest-Q-value node until the budget is exhausted; a one-shot or top-$k$ variant is also possible for larger graphs, though all experiments here use the autoregressive setting with step size 1.
+%%%%%%%%%%%%%%%
+
+
+
+
+\section{Experiments}
+Our experiments are designed to answer four main questions: 
+\begin{itemize}[leftmargin=*]
+    \item How does MUSE-CN perform on a diverse set of CNDP instances from a wide range of application domains compared to state-of-the-art ML based solutions?
+    \item Can MUSE-CN consistently outperform other CNDP heuristics?
+    \item Does MUSE-CN benefit from MT-SSL pretraining process?
+    \item Does MUSE-CN benefit from the cross-attention representation distillation module?
+\end{itemize}
+
+To perform these experiments, we curate a diverse set of 35 CNDP instances spanning biological, social, and infrastructure networks (from protein-protein interactions~\cite{zitnik2017predicting} to Facebook social networks~\cite{fan2020finding} to power grid reliability~\cite{networkrepo}), used in previous CNDP literature~\cite{zhou2018memetic,zhou2020variable,zitnik2017predicting,fan2020finding} (see Appendix~\ref{app:benchmark_graphs} for details).
+
+We compare MUSE-CN with FINDER~\cite{fan2020finding}, degree centrality heuristic~\cite{zhang2017degree}, high degree adaptive (HDA)~\cite{pastor2001epidemic}, and the CI algorithm~\cite{morone2016collective}. To provide a fair comparison between MUSE-CN and FINDER~\cite{fan2020finding}, we keep the same RL training hyperparameters for both models and as prescribed by \citet{fan2020finding} (see Appendix~\ref{app:q_learning_hyperparameters} for RL implementation details). We set the budget $b$ to be 10\% of the number of nodes for each of the benchmark networks and compare the performance of strategies with ANC (\%) and NPC metrics to evaluate both the overall robustness of the solutions as well as their final stationary quality. To test significance, we compare MUSE-CN and FINDER~\cite{fan2020finding} on the per-instance ANC and NPC values with a paired Wilcoxon signed-rank test~\cite{demvsar2006statistical}.
+
+
+We train all models on the same set of synthetic networks containing 50 to 100 nodes, using up to 100,000 iterations and over 600,000 experience instances. Early stopping is applied to mitigate overfitting and enhance generalization. Our ablation experiments assess the contributions of transfer learning and the cross-attention module to MUSE-CN's performance. For transfer learning, we compare three strategies: no pretraining, MT-SSL pretraining with fine-tuning, and pretraining with weight freezing. Notably, the no-pretraining strategy can be interpreted as an overparameterized version of FINDER. To assess representation distillation, we examine multiple strategies, including an MLP-based baseline that transforms concatenated multi-encoder representations into a single embedding and variations in the number of layers in the cross-attention module. Training hyperparameters are provided in Appendix~\ref{app:hyperparameters}. All models are evaluated in the autoregressive setting with step size 1. 
+
+All experiments are conducted on a desktop PC with a single NVIDIA GeForce RTX 4090, 64GB DDR5 RAM, an Intel Core i9-13900K CPU, and running Ubuntu 22.04.
+
+% \vspace{-1em}
+\section{Results}
+
+
+\subsection{MUSE-CN versus baseline methods}
+\paragraph{ANC (\%) performance:} As shown in Table~\ref{tab:anc_main_results}, MUSE-CN achieves the best ANC performance on 27 out of the 35 benchmark instances. FINDER~\cite{fan2020finding}, the learning-based competitor, wins on only 1 instance and fails to outperform the heuristic methods on many instances, while heuristic methods collectively achieve 7 wins (primarily through HDA). Notably, MUSE-CN consistently outperforms FINDER and the classical CNDP heuristics, showcasing its ability to generate highly robust solutions to diverse instances of real-world CNDP. MUSE-CN has improved solution robustness over FINDER~\cite{fan2020finding} with an average improvement of more than 4\% overall and approximately 11\% on the top 5 largest instances. Notably, MUSE-CN attains some of its largest per-instance gains over FINDER on large networks such as \texttt{Facebook} and \texttt{Enron} (24\% and 22\%, respectively), and it sustains clear improvements on the largest web-scale instances, including \texttt{Flickr} (12.6\%) and \texttt{Epinions} (10.4\%). This ANC advantage over FINDER is statistically significant across the 35 instances (paired Wilcoxon signed-rank, $p < 0.001$, rank-biserial $r = 0.78$).
+
+
+\paragraph{NPC scores:} Table~\ref{tab:npc_main_results} highlights the NPC scores of the final solutions (given a budget of 10\% of instance size) for each strategy. MUSE-CN achieves the best score in 30 out of 35 benchmarks, showcasing its ability to consistently arrive at low residual connectivity. The NPC reduction over FINDER is likewise statistically significant across the 35 instances (paired Wilcoxon signed-rank, $p < 0.001$, rank-biserial $r = 0.99$).
+
+
+
+\paragraph{Illustrative case studies:} Figure~\ref{fig:results_css} provides solution comparison visualizations between MUSE-CN and FINDER~\cite{fan2020finding} on selected networks, including Openflights, Facebook, Enron, Epinions, Youtube, and Flickr, ordered by increasing network size and spanning social, transportation, and communication domains. We observe that MUSE-CN consistently degrades connectivity much more rapidly and reaches lower final connectivity levels compared to FINDER.
+
+
+\begin{table}[h]
+    \centering
+    \begin{minipage}{0.49\linewidth}
+    \centering
+    \captionof{table}{ANC (\%) results on real-world benchmark. Bold: best, underline: second best.}
+    \label{tab:anc_main_results}
+    \resizebox{\linewidth}{!}{%
+    \begin{tabular}{l|c|c|c|c|c|c|c}
+        Graph & |V| & b & MUSE-CN & FINDER & CI & HDA & degree \\
+        \hline
+        \texttt{Bovine} & 121 & 12 & 14.32 & 11.88 & 11.81 & \textbf{11.43} & \underline{11.53} \\
+        \texttt{Circuit} & 252 & 25 & 70.84 & 72.74 & \underline{70.57} & 72.98 & \textbf{70.00} \\
+        \texttt{Treni\_Roma} & 255 & 25 & \textbf{29.57} & 33.65 & 47.92 & 39.02 & \underline{29.64} \\
+        \texttt{Ecoli} & 328 & 32 & 16.35 & 15.86 & 15.17 & \textbf{13.50} & \underline{13.56} \\
+        \texttt{USAir97} & 332 & 33 & \textbf{46.42} & 61.28 & 62.17 & \underline{60.33} & 62.33 \\
+        \texttt{HumanDiseasome} & 516 & 51 & 30.36 & 25.38 & 41.64 & \textbf{22.20} & \underline{25.37} \\
+        \texttt{Socfb-Caltech36} & 769 & 76 & \textbf{85.11} & 86.50 & 86.12 & \underline{86.10} & \underline{86.10} \\
+        \texttt{Soc-wiki-Vote} & 889 & 88 & \underline{71.53} & \textbf{70.41} & 78.98 & 75.81 & 77.06 \\
+        \texttt{Socfb-Reed98} & 962 & 96 & \textbf{89.06} & 89.34 & 89.25 & \underline{89.23} & 89.25 \\
+        \texttt{Hamilton1000} & 1000 & 100 & \textbf{84.91} & \underline{88.79} & 90.16 & 90.11 & 90.18 \\
+        \texttt{Email-univ} & 1133 & 113 & \textbf{79.53} & \underline{82.13} & 85.35 & 84.39 & 84.67 \\
+        \texttt{EU\_flights} & 1191 & 119 & \textbf{77.13} & 87.63 & 86.87 & \underline{85.22} & 86.85 \\
+        \texttt{Socfb-Haverford76} & 1446 & 144 & \textbf{90.11} & 90.15 & 90.16 & \underline{90.14} & 90.16 \\
+        \texttt{Openflights} & 1491 & 149 & \textbf{40.08} & 58.21 & 53.72 & \underline{50.10} & 53.75 \\
+        \texttt{OClinks} & 1899 & 189 & \textbf{60.85} & 64.74 & 65.29 & \underline{63.86} & 64.66 \\
+        \texttt{Yeast1} & 1966 & 196 & 20.37 & \underline{16.77} & 23.23 & \textbf{16.30} & 16.82 \\
+        \texttt{Hamilton2000} & 2000 & 200 & \textbf{84.57} & \underline{89.03} & 90.32 & 90.15 & 90.25 \\
+        \texttt{Socfb-Bowdoin47} & 2252 & 225 & \textbf{89.45} & 89.84 & 89.86 & \underline{89.80} & 89.84 \\
+        \texttt{Hamilton3000e} & 3000 & 300 & \textbf{84.65} & \underline{88.49} & 90.28 & 90.28 & 90.28 \\
+        \texttt{Hamilton3000d} & 3000 & 300 & \textbf{84.61} & \underline{88.56} & 90.15 & 90.15 & 90.10 \\
+        \texttt{Hamilton3000c} & 3000 & 300 & \textbf{84.93} & \underline{88.98} & 90.28 & 90.17 & 90.20 \\
+        \texttt{Hamilton3000b} & 3000 & 300 & \textbf{84.77} & \underline{88.15} & 90.23 & 90.26 & 90.23 \\
+        \texttt{Hamilton3000a} & 3000 & 300 & \textbf{84.67} & \underline{88.42} & 90.28 & 90.27 & 90.31 \\
+        \texttt{PPI\_1} & 3021 & 302 & \textbf{84.27} & 86.51 & 86.42 & \underline{85.86} & 86.35 \\
+        \texttt{PPI\_2} & 3163 & 316 & \textbf{84.53} & 86.84 & 86.67 & \underline{86.15} & 86.64 \\
+        \texttt{PPI\_3} & 3312 & 331 & \textbf{85.36} & 87.56 & 87.40 & \underline{86.73} & 87.35 \\
+        \texttt{PPI\_4} & 3480 & 348 & \textbf{83.17} & 86.14 & 86.02 & \underline{85.18} & 85.91 \\
+        \texttt{Hamilton4000} & 4000 & 400 & \textbf{84.97} & \underline{88.60} & 90.27 & 90.16 & 90.19 \\
+        \texttt{Facebook} & 4039 & 403 & \textbf{65.13} & 86.23 & \underline{75.30} & 84.58 & 86.51 \\
+        \texttt{Powergrid} & 4941 & 494 & 39.38 & 41.83 & 43.87 & \textbf{36.22} & \underline{39.35} \\
+        \texttt{Hamilton5000} & 5000 & 500 & \textbf{84.80} & \underline{88.48} & 90.29 & 90.21 & 90.27 \\
+        \texttt{Enron} & 33696 & 3369 & \textbf{19.76} & 25.39 & 26.23 & \underline{20.57} & 22.84 \\
+        \texttt{Epinions} & 75877 & 7587 & \textbf{30.13} & 33.62 & 33.24 & \underline{32.18} & 35.09 \\
+        \texttt{Youtube} & 1134890 & 113489 & 13.95 & 14.86 & \underline{12.51} & \textbf{11.91} & 14.88 \\
+        \texttt{Flickr} & 1624991 & 162499 & \textbf{32.63} & \underline{37.35} & 41.06 & 37.95 & 47.01 \\
+        \hline
+        \textbf{Wins} & & & 27 & 1 & 0 & 6 & 1 \\
+        \end{tabular}
+        }
+    \end{minipage}%
+    \hfill
+    \begin{minipage}{0.49\linewidth}
+    \centering
+    \captionof{table}{NPC results on real-world benchmark. Bold: best, underline: second best.}
+    \label{tab:npc_main_results}
+    \resizebox{\linewidth}{!}{%
+        \begin{tabular}{l|c|c|c|c|c|c|c}
+            Graph & |V| & b & MUSE-CN & FINDER & CI & HDA & degree \\
+            \hline
+            \texttt{Bovine} & 121 & 12 & \textbf{0.00} & \textbf{0.00} & \textbf{0.00} & \textbf{0.00} & \textbf{0.00} \\
+            \texttt{Circuit} & 252 & 25 & 0.34 & 0.42 & \underline{0.33} & \textbf{0.31} & 0.41 \\
+            \texttt{Treni\_Roma} & 255 & 25 & \textbf{0.06} & 0.09 & 0.13 & \underline{0.08} & 0.13 \\
+            \texttt{Ecoli} & 328 & 32 & \textbf{0.00} & \textbf{0.00} & 0.01 & \textbf{0.00} & \textbf{0.00} \\
+            \texttt{USAir97} & 332 & 33 & \textbf{0.22} & \underline{0.27} & 0.42 & 0.29 & 0.42 \\
+            \texttt{HumanDiseasome} & 516 & 51 & 0.08 & 0.08 & 0.11 & \textbf{0.01} & \underline{0.02} \\
+            \texttt{Socfb-Caltech36} & 769 & 76 & \textbf{0.75} & 0.76 & \textbf{0.75} & \textbf{0.75} & \textbf{0.75} \\
+            \texttt{Soc-wiki-Vote} & 889 & 88 & \textbf{0.44} & \underline{0.45} & 0.59 & 0.53 & 0.54 \\
+            \texttt{Socfb-Reed98} & 962 & 96 & \textbf{0.79} & 0.80 & 0.80 & \textbf{0.79} & \textbf{0.79} \\
+            \texttt{Hamilton1000} & 1000 & 100 & \textbf{0.71} & \underline{0.76} & 0.81 & 0.80 & 0.80 \\
+            \texttt{Email-univ} & 1133 & 113 & \textbf{0.61} & \underline{0.63} & 0.71 & 0.69 & 0.70 \\
+            \texttt{EU\_flights} & 1191 & 119 & \textbf{0.64} & 0.76 & 0.71 & \underline{0.70} & 0.71 \\
+            \texttt{Socfb-Haverford76} & 1446 & 144 & \textbf{0.81} & \textbf{0.81} & \textbf{0.81} & \textbf{0.81} & \textbf{0.81} \\
+            \texttt{Openflights} & 1491 & 149 & \textbf{0.17} & \underline{0.19} & 0.33 & 0.23 & 0.32 \\
+            \texttt{OClinks} & 1899 & 189 & \underline{0.41} & \textbf{0.40} & 0.47 & 0.44 & 0.46 \\
+            \texttt{Yeast1} & 1966 & 196 & \textbf{0.00} & \textbf{0.00} & 0.01 & \textbf{0.00} & \textbf{0.00} \\
+            \texttt{Hamilton2000} & 2000 & 200 & \textbf{0.70} & \underline{0.77} & 0.81 & 0.80 & 0.81 \\
+            \texttt{Socfb-Bowdoin47} & 2252 & 225 & \textbf{0.80} & \textbf{0.80} & \textbf{0.80} & \textbf{0.80} & \textbf{0.80} \\
+            \texttt{Hamilton3000e} & 3000 & 300 & \textbf{0.70} & \underline{0.76} & 0.81 & 0.81 & 0.81 \\
+            \texttt{Hamilton3000d} & 3000 & 300 & \textbf{0.70} & \underline{0.76} & 0.81 & 0.80 & 0.80 \\
+            \texttt{Hamilton3000c} & 3000 & 300 & \textbf{0.70} & \underline{0.77} & 0.81 & 0.80 & 0.81 \\
+            \texttt{Hamilton3000b} & 3000 & 300 & \textbf{0.70} & \underline{0.75} & 0.81 & 0.81 & 0.81 \\
+            \texttt{Hamilton3000a} & 3000 & 300 & \textbf{0.70} & \underline{0.76} & 0.81 & 0.81 & 0.81 \\
+            \texttt{PPI\_1} & 3021 & 302 & \textbf{0.71} & 0.75 & 0.75 & \underline{0.74} & 0.75 \\
+            \texttt{PPI\_2} & 3163 & 316 & \textbf{0.72} & 0.76 & 0.75 & \underline{0.74} & 0.75 \\
+            \texttt{PPI\_3} & 3312 & 331 & \textbf{0.73} & 0.77 & 0.76 & \underline{0.74} & 0.76 \\
+            \texttt{PPI\_4} & 3480 & 348 & \textbf{0.70} & 0.75 & 0.75 & \underline{0.73} & 0.74 \\
+            \texttt{Hamilton4000} & 4000 & 400 & \textbf{0.70} & \underline{0.76} & 0.81 & 0.81 & 0.81 \\
+            \texttt{Facebook} & 4039 & 403 & \textbf{0.53} & 0.76 & \underline{0.57} & 0.66 & 0.77 \\
+            \texttt{Powergrid} & 4941 & 494 & \textbf{0.01} & 0.04 & 0.10 & \textbf{0.01} & 0.02 \\
+            \texttt{Hamilton5000} & 5000 & 500 & \textbf{0.70} & \underline{0.76} & 0.81 & 0.81 & 0.81 \\
+            \texttt{Enron} & 33696 & 3369 & \textbf{0.02} & 0.04 & 0.06 & 0.03 & \textbf{0.02} \\
+            \texttt{Epinions} & 75877 & 7587 & 0.02 & 0.02 & \textbf{0.00} & \underline{0.00} & 0.04 \\
+            \texttt{Youtube} & 1134890 & 113489 & \textbf{0.00} & \textbf{0.00} & \textbf{0.00} & \textbf{0.00} & \textbf{0.00} \\
+            \texttt{Flickr} & 1624991 & 162499 & 0.04 & 0.05 & \textbf{0.02} & \underline{0.04} & 0.08 \\
+            \hline
+            \textbf{Wins} & & & 30 & 7 & 7 & 11 & 9 \\
+            \end{tabular}
+        }
+    \end{minipage}
+    \end{table}
+
+
+    \begin{figure}[htbp]
+        \centering
+        \begin{subfigure}[b]{0.31\columnwidth}
+            \centering
+            \includegraphics[width=\textwidth]{Figs/results_ccs/openflights.png}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.31\columnwidth}
+            \centering
+            \includegraphics[width=\textwidth]{Figs/results_ccs/facebook.png}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.31\columnwidth}
+            \centering
+            \includegraphics[width=\textwidth]{Figs/results_ccs/Enron.png}
+        \end{subfigure}
+
+        \vspace{0.4em}
+
+        \begin{subfigure}[b]{0.31\columnwidth}
+            \centering
+            \includegraphics[width=\textwidth]{Figs/results_ccs/Epinions.png}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.31\columnwidth}
+            \centering
+            \includegraphics[width=\textwidth]{Figs/results_ccs/Youtube.png}
+        \end{subfigure}
+        \hfill
+        \begin{subfigure}[b]{0.31\columnwidth}
+            \centering
+            \includegraphics[width=\textwidth]{Figs/results_ccs/Flickr.png}
+        \end{subfigure}
+        \caption{MUSE-CN versus FINDER~\cite{fan2020finding}. Instances of varying graph size and application domain with notable improvements in overall solution robustness.}
+        \label{fig:results_css}
+        \vspace{-0.7em}
+    \end{figure}
+    
+
+
+\subsection{Ablation studies}
+\paragraph{Impact of MT-SSL pretraining:} Tables~\ref{tab:anc_pretraining}, \ref{tab:npc_pretraining} demonstrate the effect of different transfer learning strategies for the multi-encoder module: freezing pretrained weights, fine-tuning them, or training from scratch (i.e., no pretraining, an overparameterized version of FINDER~\cite{fan2020finding}). In all studied cases, pretraining yields better results both in terms of ANC and NPC. All cases employ the same graph encoder module with 5 encoders and one layer of cross-attention representation distillation. Freezing pretrained weights prevents forgetting and achieves the best performance in 5 out of 6 benchmarks.
+
+    \begin{table}[!ht]
+    \centering
+    \begin{minipage}{0.49\linewidth}
+    \centering
+    \captionof{table}{ANC (\%) comparison for transfer learning strategies. Bold: best, underline: second best.}
+    \label{tab:anc_pretraining}
+    \resizebox{\linewidth}{!}{%
+        \begin{tabular}{l|c|c|c|c|c}
+            Graph & |V| & b & Pretraining frozen & Pretraining finetuned & No pretraining \\
+            \hline
+            \texttt{USAir97} & 332 & 33 & \textbf{46.42} & 57.52 & \underline{56.82} \\
+            \texttt{Openflights} & 1491 & 149 & \textbf{40.08} & \underline{53.91} & 60.19 \\
+            \texttt{PPI\_4} & 3480 & 348 & \textbf{83.17} & 85.34 & \underline{84.83} \\
+            \texttt{Facebook} & 4039 & 403 & \textbf{65.13} & 83.96 & \underline{77.04} \\
+            \texttt{Hamilton5000} & 5000 & 500 & \underline{84.80} & \textbf{84.52} & 88.60 \\
+            \texttt{Enron} & 33696 & 3369 & \textbf{19.76} & \underline{25.72} & 30.43 \\
+            \hline
+            \textbf{Wins} & & & 5 & 1 & 0 \\
+            \end{tabular}
+        }
+    \end{minipage}%
+    \hfill
+    \begin{minipage}{0.49\linewidth}
+    \centering
+    \captionof{table}{NPC comparison for transfer learning strategies. Bold: best, underline: second best.}
+    \label{tab:npc_pretraining}
+    \resizebox{\linewidth}{!}{%
+        \begin{tabular}{l|c|c|c|c|c}
+            Graph & |V| & b & Pretraining frozen & Pretraining finetuned & No pretraining \\
+            \hline
+            \texttt{USAir97} & 332 & 33 & \textbf{0.22} & 0.29 & \underline{0.25} \\
+            \texttt{Openflights} & 1491 & 149 & \textbf{0.17} & 0.20 & \underline{0.18} \\
+            \texttt{PPI\_4} & 3480 & 348 & \textbf{0.70} & \underline{0.72} & 0.73 \\
+            \texttt{Facebook} & 4039 & 403 & \textbf{0.53} & \underline{0.66} & \underline{0.66} \\
+            \texttt{Hamilton5000} & 5000 & 500 & \underline{0.70} & \textbf{0.69} & 0.76 \\
+            \texttt{Enron} & 33696 & 3369 & \textbf{0.02} & \underline{0.05} & \underline{0.05} \\
+            \hline
+            \textbf{Wins} & & & 5 & 1 & 0 \\
+            \end{tabular}
+        }
+    \end{minipage}
+    \end{table}
+
+\paragraph{Influence of cross-attention representation distillation:} Tables~\ref{tab:anc_CA} and \ref{tab:npc_CA} demonstrate the ability of the cross-attention module in combining task-specific node representations into a final collaborative and robust representation. We train variations of MUSE-CN using a baseline MLP-based representation distillation approach, as well as  1-, 2-, and 4-layer cross-attention modules. In all cases the pretrained weights are frozen to ensure a fair comparison. Cross-attention representation distillation consistently outperforms the MLP alternative. Additionally, using a single-layer cross-attention module achieves the best performance, likely due to learnable parameter sparsity leading to less overfitting and better generalization.
+
+    \begin{table}[!ht]
+    \centering
+    \begin{minipage}{0.49\linewidth}
+    \centering
+    \captionof{table}{ANC (\%) comparison for task reconciliation modules. $k$-L CA is a $k$-layer cross-attention module. Bold: best, underline: second best.}
+    \label{tab:anc_CA}
+    \resizebox{\linewidth}{!}{%
+                \begin{tabular}{l|c|c|c|c|c|c}
+                    Graph & |V| & b & MLP  & 1-L CA & 2-L CA & 4-L CA \\
+                    \hline
+                    \texttt{USAir97} & 332 & 33 & 58.50 & \textbf{46.42} & 54.16 & \underline{52.20} \\
+                    \texttt{Openflights} & 1491 & 149 & 50.91 & \textbf{40.08} & 46.90 & \underline{46.30} \\
+                    \texttt{PPI\_4} & 3480 & 348 & \underline{84.59} & \textbf{83.17} & 84.75 & 84.87 \\
+                    \texttt{Facebook} & 4039 & 403 & 83.04 & \textbf{65.13} & 73.69 & \underline{73.53} \\
+                    \texttt{Hamilton5000} & 5000 & 500 & 85.13 & \underline{84.80} & 85.16 & \textbf{84.57} \\
+                    \texttt{Enron} & 33696 & 3369 & 25.60 & \textbf{19.76} & 23.27 & \underline{23.05} \\
+                    \hline
+                    \textbf{Wins} & &  & 0 & 5 & 0 & 1 \\
+                    \end{tabular}
+                }
+    \end{minipage}%
+    \hfill
+    \begin{minipage}{0.49\linewidth}
+    \centering
+    \captionof{table}{NPC comparison for task reconciliation modules. $k$-L CA is a $k$-layer cross-attention module. Bold: best, underline: second best.}
+    \label{tab:npc_CA}
+    \resizebox{\linewidth}{!}{%
+                    \begin{tabular}{l|c|c|c|c|c|c}
+                        Graph & |V| & b & MLP  & 1-l CA & 2-l CA & 4-l CA \\
+                        \hline
+                        \texttt{USAir97} & 332 & 33 & \underline{0.28} & \textbf{0.22} & \underline{0.28} & \underline{0.28} \\
+                        \texttt{Openflights} & 1491 & 149 & \underline{0.19} & \textbf{0.17} & \underline{0.19} & 0.20 \\
+                        \texttt{PPI\_4} & 3480 & 348 & \underline{0.73} & \textbf{0.70} & \underline{0.73} & \underline{0.73} \\
+                        \texttt{Facebook} & 4039 & 403 & 0.73 & \textbf{0.53} & \underline{0.65} & \underline{0.65} \\
+                        \texttt{Hamilton5000} & 5000 & 500 & 0.71 & \textbf{0.70} & \textbf{0.70} & \textbf{0.70} \\
+                        \texttt{Enron} & 33696 & 3369 & \underline{0.03} & \textbf{0.02} & 0.04 & 0.04 \\
+                        \hline
+                        \textbf{Wins} & &  & 0 & 6 & 1 & 1 \\
+                        \end{tabular}
+                    }
+    \end{minipage}
+    \end{table}
+
+
+
+\subsection{Time complexity and practical considerations}
+MUSE-CN maintains the same GraphSAGE backbone as FINDER for each encoder, but runs $e_{num}=5$ such encoders in parallel followed by a lightweight cross-attention module; our final model contains roughly 1.85 million parameters compared to FINDER’s roughly 280,000 parameters~\cite{fan2020finding}. A single FINDER forward pass costs $\mathcal{O}(|V|+|E|)$~\cite{fan2020finding}, the standard cost of one GraphSAGE encoder pass~\cite{hamilton2017inductive}. Since $e_{num}$ is a small constant fixed independently of graph size, a full MUSE-CN forward pass ($e_{num}$ parallel encoder passes plus a cross-attention module costing $\mathcal{O}(|V| \cdot e_{num}^2 \cdot d)$, attending over only $e_{num}$ tokens per node) remains in the same $\mathcal{O}(|V|+|E|)$ complexity class, at the cost of a larger constant factor ($\sim\!e_{num}\times$). Empirically, MUSE-CN scales to web-scale networks without any architectural changes: our benchmark includes instances with over 1.6 million nodes and 15 million edges (\texttt{Flickr}), on which MUSE-CN still produces high-quality solutions despite being trained only on synthetic graphs of 50 to 100 nodes.
+
+Additionally, the MT-SSL pretraining phase is performed once on the synthetic graphs and the pretrained weights can be reused across diverse real-world COP applications. The encoder weights remain frozen, allowing MUSE-CN to adapt quickly to downstream optimization tasks with low additional cost. This separation of pretraining from downstream optimization yields a flexible, modular framework suitable for a broad spectrum of graph-based COPs.
+        
+    
+    
+
+%%%%%%%%%%%%%%%%%%
+
+
+\section{Conclusion}
+
+
+MUSE-CN demonstrates that enhancing graph encoding through multi-encoder architectures and self-supervised pretraining significantly improves learning-based solutions for combinatorial optimization. Our experiments across 35 real-world instances, including web-scale networks with over a million nodes, show consistent performance gains over both learning-based methods and traditional heuristics, with improvements of approximately 11\% on the largest instances. The modular separation between graph encoding and optimization makes MUSE-CN readily adaptable to other COPs, offering a new graph learning paradigm for learning-based combinatorial optimization.
+
+Future work could explore integrating autoregressive heuristic search algorithms like beam search for more sophisticated solution space exploration~\cite{lowerre1976harpy}, and improving encoder expressivity through more expressive GNN architectures~\cite{rampavsek2022recipe}. Finally, MUSE-CN framework can be extended to other combinatorial problems such as maximum clique and set covering.
+
+
+\bibliographystyle{unsrtnat}
+\bibliography{bib}
+
+\appendix
+
+
+
+\section{Appendix A: Data}
+
+\subsection{Appendix A.1: SSL dataset}\label{app:ssl_dataset}
+
+
+We use the \texttt{NetworkX} library~\cite{hagberg2020networkx} to generate the synthetic graphs. A list of parameters for each graph type is provided in Table~\ref{tab:SSL_corpus}.
+
+\begin{table}[ht]
+\centering
+\caption{Synthetic corpus of networks for MT-SSL pretraining in MUSE-CN.}
+\label{tab:SSL_corpus}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{llll}
+\toprule
+\textbf{Graph Type} & \textbf{Number of Graphs} & \textbf{Parameter} & \textbf{Values} \\
+\midrule
+\multirow{4}{*}{Newman-Watts-Strogatz~\cite{newman1999renormalization}} & \multirow{4}{*}{450} 
+    & $n$    & 100, 200, 300, 400, 500 \\
+    & & $k$    & 4, 8, 12 \\
+    & & $p$ & 0.1, 0.2, 0.3 \\
+    & & seed           & 9, 20, 42, 3000, 4042, 4240, 4242, 20202, 101010, 202020\\
+\midrule
+\multirow{3}{*}{Barabasi-Albert~\cite{barabasi1999emergence}} & \multirow{3}{*}{150} 
+    & $n$  & 100, 200, 300, 400, 500 \\
+    & & $m$    & 4, 8, 12 \\
+    & & seed           &  9, 20, 42, 3000, 4042, 4240, 4242, 20202, 101010, 202020\\
+\midrule
+\multirow{3}{*}{Erdos-Renyi~\cite{gilbert1959random}} & \multirow{3}{*}{150} 
+    & $n$  & 100, 200, 300, 400, 500 \\
+    & & $p$  & 0.01, 0.05, 0.1 \\
+    & & seed           &  9, 20, 42, 3000, 4042, 4240, 4242, 20202, 101010, 202020\\
+\midrule
+Total & 750 & & \\
+\end{tabular}%
+}
+\end{table}
+
+
+
+\subsection{Appendix A.2: Real-world benchmark}
+\label{app:benchmark_graphs}
+
+Table~\ref{tab:real_world_benchmark} provides a summary of the real-world benchmark datasets used in the experiments.
+\begin{table}[htbp]
+\caption{Real-world benchmark datasets.}
+\label{tab:real_world_benchmark}
+\centering
+\resizebox{\columnwidth}{!}{% 
+\begin{tabular}{|l|c|c|c|c|}
+    \hline
+    Graph Name & |V| & |E| & Density & Budget \\
+    \hline
+    Bovine & 121 & 190 & 0.0262 & 12 \\
+    Circuit & 252 & 399 & 0.0126 & 25 \\
+    Treni\_Roma & 255 & 272 & 0.0084 & 25 \\
+    Ecoli & 328 & 456 & 0.0085 & 32 \\
+    USAir97 & 332 & 2126 & 0.0387 & 33 \\
+    HumanDiseasome & 516 & 1188 & 0.0089 & 51 \\
+    Socfb-Caltech36 & 769 & 16656 & 0.0564 & 76 \\
+    Soc-wiki-Vote & 889 & 2914 & 0.0074 & 88 \\
+    Socfb-Reed98 & 962 & 18812 & 0.0407 & 96 \\
+    Hamilton1000 & 1000 & 1998 & 0.0040 & 100 \\
+    Email-univ & 1133 & 5451 & 0.0085 & 113 \\
+    EU\_flights & 1191 & 31610 & 0.0446 & 119 \\
+    Socfb-Haverford76 & 1446 & 59589 & 0.0570 & 144 \\
+    Openflights & 1491 & 13900 & 0.0125 & 149 \\
+    OClinks & 1899 & 13838 & 0.0077 & 189 \\
+    Yeast1 & 1966 & 2705 & 0.0014 & 196 \\
+    Hamilton2000 & 2000 & 3996 & 0.0020 & 200 \\
+    Socfb-Bowdoin47 & 2252 & 84387 & 0.0333 & 225 \\
+    Hamilton3000c & 3000 & 5996 & 0.0013 & 300 \\
+    Hamilton3000e & 3000 & 5996 & 0.0013 & 300 \\
+    Hamilton3000a & 3000 & 5999 & 0.0013 & 300 \\
+    Hamilton3000d & 3000 & 5993 & 0.0013 & 300 \\
+    Hamilton3000b & 3000 & 5997 & 0.0013 & 300 \\
+    PPI\_1 & 3021 & 45669 & 0.0100 & 302 \\
+    PPI\_2 & 3163 & 47079 & 0.0094 & 316 \\
+    PPI\_3 & 3312 & 53099 & 0.0097 & 331 \\
+    PPI\_4 & 3480 & 53377 & 0.0088 & 348 \\
+    Hamilton4000 & 4000 & 7997 & 0.0010 & 400 \\
+    Facebook & 4039 & 88234 & 0.0108 & 403 \\
+    Powergrid & 4941 & 6594 & 0.0005 & 494 \\
+    Hamilton5000 & 5000 & 9999 & 0.0008 & 500 \\
+    Enron & 33696 & 180811 & 0.0003 & 3369 \\
+    Epinions & 75877 & 405739 & 0.0001 & 7587 \\
+    Youtube & 1134890 & 2987624 & 0.0000 & 113489 \\
+    Flickr & 1624991 & 15473043 & 0.0000 & 162499 \\
+    \hline
+    \end{tabular}
+    }
+\end{table}
+\clearpage
+
+
+\section{Appendix B: SSL tasks}
+\label{app:ssl_tasks}
+
+
+We formally define the five SSL tasks used to pretrain MUSE-CN, categorized into generative reconstruction (\featrec and \toporec), whitening decorrelation (\repdecor), and mutual information maximization (\ming and \minsg). These tasks have been previously discussed and employed in graph MT-SSL research~\cite{ju2022multi,khoshbakhtian2024mega}. We adopt their implementations from the ParetoGNN GitHub repository~(\url{https://github.com/jumxglhf/ParetoGNN}).
+
+To enable mini-batch training, we employ neighborhood sampling. For each SSL task $t$, subgraphs are sampled from the large graph corpus $\mathcal{G}$, denoted as $g$, and subjected to task-specific augmentations, represented as $\mathcal{T}_t(\cdot)$. Subgraphs are selected by choosing $N_t$ seed nodes at random and incorporating all nodes within $k_t$ hops of these seeds, where $k_t$ and $N_t$ are task-specific hyperparameters. The augmentations applied include feature masking, edge dropping, and node dropping. To simplify notation, the operations of graph sampling and augmentation are collectively denoted as $\mathcal{T}_t(\cdot)$. Task-specific hyperparameters for these processes are detailed in Appendix~\ref{app:pretraining_hyperparameters}.
+
+
+
+We use GraphSAGE layers~\cite{hamilton2017inductive}, as defined in Section~\ref{sec:related_work}. Throughout this appendix, we denote the final $d$-dimensional output of a GraphSAGE encoder, parameterized by $\boldsymbol{\theta}$, for a sampled subgraph $g$ as $H_g^{\boldsymbol{\theta}} \in \mathbb{R}^{N \times d}$. Here, $N$ is the number of nodes, with adjacency matrix $\mathbf{A} \in \mathbb{R}^{N \times N}$ and feature matrix $\mathbf{X}_g \in \mathbb{R}^{N \times D}$. To ensure generalizability in MUSE-CN, we use a uniform feature matrix where all values are set to 1 (i.e., $\forall i, \forall j, \mathbf{X}_g[i,j] = 1.0$).
+
+
+\subsection{Generative reconstruction}
+\paragraph{Feature reconstruction (\featrec):}
+This task is based on the principle that topological information can be inferred from node features~\cite{zhang2021graph}. Following GraphMAE's~\citep{hou2022graphmae} masking strategy, node features are randomly masked before encoding, producing $H_g^{\boldsymbol{\theta}}$. Masked features are then reconstructed using a convolutional decoder. Given a sampled subgraph $g \sim \mathcal{T}_{\featrec}(\mathcal{G})$, reconstruction is defined as:
+\begin{equation}
+\hat{\mathbf{X}}_g = \mathbf{A}_g \odot H_g^{\boldsymbol{\theta}} \odot \mathbf{M} \cdot \mathbf{W}^{\text{Dec}},
+\end{equation}
+where $\odot$ denotes the Hadamard product, $\mathbf{M} \in \{0,1\}^{N \times d}$ is the masking matrix, and $\mathbf{W}^{\text{Dec}} \in \mathbb{R}^{d \times D}$ is the decoder parameter matrix. The objective is defined as:
+\begin{equation}
+\mathcal{L}_{\featrec} = \frac{\lVert \hat{\mathbf{X}}_g \odot \hat{\mathbf{M}} - \mathbf{X}_g\odot \hat{\mathbf{M}} \rVert_F}{\lVert \mathbf{X}_g \odot \hat{\mathbf{M}} \rVert_F},
+\end{equation}
+where $\hat{\mathbf{M}} \in \{0, 1\}^{N \times D}$ is another masking matrix ensuring correct feature restoration.
+
+
+\paragraph{Topological reconstruction (\toporec):}
+This task focuses on modeling pairwise relationships between nodes. For a sampled subgraph $g \sim \mathcal{T}_{\toporec}(\mathcal{G})$, $B$ pairs of connected nodes $V^{+}$ and $B$ pairs of disconnected nodes $V^{-}$ are selected. The connection probability between nodes $i$ and $j$ is computed as:
+\begin{equation}
+    P_{\toporec}(i,j) = \sigma((H_g^{\boldsymbol{\theta}}[i] \odot H_g^{\boldsymbol{\theta}}[j]) \cdot \mathbf{W}^{\text{Topo}}),
+\end{equation}
+where $\mathbf{W}^{\text{Topo}} \in \mathbb{R}^{d \times 1}$ is a learnable parameter vector and $\sigma(\cdot)$ is the sigmoid function. The objective function minimizes the binary cross-entropy loss:
+\begin{equation}
+\mathcal{L}_{\toporec} = -\frac{1}{2B} \sum_{(i,j)\in V^+} \log(P_{\toporec}(i,j)) + \sum_{(i,j)\in V^-} \log(1-P_{\toporec}(i,j)).
+\end{equation}
+
+
+\subsection{Whitening decorrelation}
+
+\paragraph{Representation decorrelation (\repdecor):}
+This task promotes the similarity between representations of identical nodes across two independently augmented sub-graphs. To avoid trivial solutions where node representations collapse, covariance is enforced between the representation matrices of the two sub-graphs to be an identity matrix. This constraint ensures that each dimension in the hidden space contains orthogonal information~\citep{ermolov2021whitening,zbontar2021barlow,zhang2021canonical}.
+
+Given two sub-graphs $g_1, g_2 \sim \mathcal{T}_{\repdecor}(\mathcal{G})$, which share the same seed nodes but have different augmentations, the objective of \repdecor is defined as:
+\begin{equation}
+\mathcal{L}_{\repdecor} = \Big\lVert H_{g_1}^{\boldsymbol{\theta}} - H_{g_2}^{\boldsymbol{\theta}} \Big\rVert_F + \alpha \cdot \Big\lVert {H_{g_1}^{\boldsymbol{\theta}}}^\intercal \cdot {H_{g_2}^{\boldsymbol{\theta}}}^\intercal - \mathbf{I}^{d \times d} \Big\rVert_F
+\end{equation}
+where the first term encourages similarity between node representations, and the second term prevents solution collapse. Here, $\mathbf{I}^{d \times d}$ is the identity matrix of dimension $d \times d$, and $\alpha$ is a predefined balancing term ($\alpha = 1\mathrm{e}-3$ for all datasets~\cite{ju2022multi}).
+
+
+\subsection{Mutual information maximization}
+
+\paragraph*{Mutual information between nodes and whole graph (\ming):}
+This task encourages the graph encoder to learn coarse graph-level knowledge by maximizing mutual information. First, a subgraph $g \sim \mathcal{T}_{\ming}(\mathcal{G})$, is corrupted into $g^\prime$ through feature shuffling~\citep{velivckovicdeep}. The graph-level representation of $g$ is obtained via graph mean pooling~\citep{xu2018powerful}, and the goal is to align the node representations in $g$ with this pooled representation while distancing those in $g'$. This task helps the encoder to detect perturbations caused by topological changes such as feature shuffling. The objective of \ming is defined as a binary cross entropy loss:
+\begin{equation*}
+\mathcal{L}_{\ming} = -\frac{1}{2N} \sum_{i=1}^{N} \log\big(P_{\ming}(H_{g}^{\boldsymbol{\theta}}[i],\mathbf{h}_g)\big) + \log\big(1- P_{\ming}(H_{g^\prime}^{\boldsymbol{\theta}}[i],\mathbf{h}_g)\big),
+\end{equation*}
+where $\mathbf{h}_g = \textsc{Pool}(H_{g}^{\boldsymbol{\theta}})$ is the pooled subgraph representation, and $P_{\ming}(\mathbf{h},\mathbf{h}_g) = (\mathbf{h} \, \vert\vert \, \mathbf{h}_g)\cdot \mathbf{W}^{\ming}$ with $\mathbf{W}^{\ming} \in \mathbb{R}^{2d \times 1}$ being the parameter vector and $\vert\vert$ the concatenation operator.
+
+\paragraph*{Mutual information between nodes and their sub-graphs (\minsg):}
+This task aims to learn fine-grained graph-level knowledge by maximizing mutual information between independently augmented subgraphs originating from the same seed nodes. This approach provides more fine-grained embeddings compared to \ming. Given two such sub-graphs $g_1, g_2 \sim \mathcal{T}_{\minsg}(\mathcal{G})$, the objective of \minsg is a variant of InfoNCE~\citep{chen2020simple}:
+\begin{equation}
+\resizebox{0.9\hsize}{!}{$
+\mathcal{L}_{\minsg} = -\frac{1}{N} \sum_{i=1}^{N} \log\Big(\frac{\text{exp}\Big(\textsc{Sim}\big(H_{g_1}^{\boldsymbol{\theta}}[i], H_{g_2}^{\boldsymbol{\theta}}[i]\big)/\tau\Big)}{\sum_{j=1}^{N} \textsc{Exp}\Big(\textsc{Sim}\big(H_{g_1}^{\boldsymbol{\theta}}[i], H_{g_1}^{\boldsymbol{\theta}}[j]\big)/\tau\Big) + \text{exp}\Big(\textsc{Sim}\big(H_{g_1}^{\boldsymbol{\theta}}[i], H_{g_2}^{\boldsymbol{\theta}}[j]\big)/\tau\Big)}\Big)
+$}
+\end{equation}
+where $\textsc{Sim}(\mathbf{h}_1, \mathbf{h}_2) = \sfrac{\mathbf{h}_1\cdot\mathbf{h}_2^\top}{\lVert\mathbf{h}_1\rVert_F\cdot\lVert\mathbf{h}_2\rVert_F}$ is the similarity metric, and $\tau$ is the temperature hyper-parameter used to control the sharpness of the similarity distribution ($\tau = 0.1$ for all datasets~\cite{ju2022multi}).
+
+
+\section{Appendix C: MUSE-CN and baselines hyperparameters}
+\label{app:hyperparameters}
+
+\subsection{Appendix C.1: DQN training framework}
+\label{app:dqn_framework}
+
+This section provides the full training details for the DQN algorithm summarized in Section~\ref{sec:muse_cn}. The primary objective of Q-learning is to approximate the optimal action-value function $Q^*(s,a)$, which satisfies the Bellman equation:
+\begin{equation}
+    Q^*(s, a) = \mathbb{E}\left[r + \gamma \max_{a'} Q^*(s', a') \mid s, a \right],
+\end{equation}
+where $r$ is the immediate reward, $\gamma$ is the discount factor, and $s'$ is the next state following action $a$~\cite{sutton2018reinforcement}. In DQN, $Q^*(s, a)$ is approximated using a deep neural network parameterized by $\theta$, denoted as $\hat{Q}_{\theta}(s, a)$. The training objective is to minimize the temporal difference (TD) loss:
+\begin{equation}
+    L(\theta) = \mathbb{E}_{(s, a, r, s') \sim D} \left[ \left(y_t - \hat{Q}_{\theta}(s, a)\right)^2 \right],
+\end{equation}
+where the target value $y_t$ is defined as
+\begin{equation}
+    y_t = r + \gamma \max_{a'} \hat{Q}_{\bar{\theta}}(s', a').
+\end{equation}
+where $\hat{Q}_{\bar{\theta}}$ is the target network, and a delayed copy of $\hat{Q}_{\theta}$ that gets periodically updated. Using the target network improves and stabilizes the training process~\cite{mnih2015human}.
+
+To improve sample efficiency and stabilize learning by breaking the correlation between consecutive samples, DQN uses an experience replay buffer~\cite{mnih2015human}. MUSE-CN periodically runs simulations on training graphs, storing transitions $(s, a, r, s')$ in the buffer. Mini-batches are randomly sampled from the replay buffer for training using a gradient-based optimizer such as Adam~\cite{kingma2014adam}.
+
+We employ \emph{n-step TD learning}~\cite{sutton2018reinforcement} for training of all models, where instead of updating based on a single-step reward, a bootstrapped target is computed using the sum of discounted rewards over $N$ future steps:
+\begin{equation}
+    G_t^{(N)} = \sum_{i=0}^{N-1} \gamma^i r_{t+i} + \gamma^N \max_{a'} \hat{Q}_{\bar{\theta}}(s_{t+N}, a').
+\end{equation}
+The n-step TD strategy accelerates convergence by propagating rewards over multiple steps, yielding more precise estimates of each node's long-term connectivity impact.
+
+Exploration is handled via an $\epsilon$-greedy strategy~\cite{sutton2018reinforcement} to balance exploration and exploitation:
+\begin{equation}
+    a_t = \begin{cases}
+        \text{random action}, & \text{with probability } \epsilon_t \\
+        \argmax_{a} \hat{Q}_{\theta}(s_t, a), & \text{otherwise}
+    \end{cases}
+\end{equation}
+where $\epsilon_t$ follows an exponential decay schedule:
+\begin{equation}
+    \epsilon_t = \max(\epsilon_{\min}, \epsilon_{\max} \cdot e^{-\lambda t})
+\end{equation}
+where $\epsilon_{\min}$ and $\epsilon_{\max}$ are the minimum and maximum exploration rates, and $\lambda > 0$ is the decay rate. The exponential decay ensures more exploration in early training stages, gradually shifting toward exploitation as learning progresses.
+
+\subsection{Appendix C.2: MT-SSL pretraining hyperparameters}
+\label{app:pretraining_hyperparameters}
+
+
+
+We adopt the hyperparameters recommended by \citet{khoshbakhtian2024mega} for MT-SSL pretraining of MUSE-CN's multi-encoder graph module. These hyperparameters are listed in Table~\ref{tab:SSL_hyperparameters}.
+
+\begin{table}[H]
+    \tiny
+    \centering
+    \caption{Hyperparameters for MT-SSL Pretraining of MUSE-CN.}
+    \label{tab:SSL_hyperparameters}
+    \begin{tabular}{l|c}
+    \toprule 
+    Hyperparam. & Value \\
+    \cmidrule(r){1-2} 
+    \multicolumn{2}{c}{\featrec}\\
+    \cmidrule(r){1-2} 
+    Sampling Strategy & Edge sampling \\
+    \# Seed Nodes     & 1024 \\
+    Node Mask Ratio   & 0.5 \\
+    Edge Drop Ratio   & 0.35 \\
+    \cmidrule(r){1-2} 
+    \multicolumn{2}{c}{\toporec}\\
+    \cmidrule(r){1-2} 
+    Sampling Strategy & $2$-hop sage sampler~\cite{hamilton2017inductive} \\
+    Batch size $B$    & 1024 \\
+    \cmidrule(r){1-2} 
+    \multicolumn{2}{c}{\repdecor}\\
+    \cmidrule(r){1-2} 
+    Sampling Strategy & 2-hop sage sampler~\cite{hamilton2017inductive} \\
+    \# Seed Nodes     & 1024 \\
+    Edge Drop Ratio   & 0.2 \\
+    Feature Mask Ratio& 0.2 \\
+    \cmidrule(r){1-2} 
+    \multicolumn{2}{c}{\ming}\\
+    \cmidrule(r){1-2} 
+    Sampling Strategy & 2-hop sage sampler~\cite{hamilton2017inductive} \\
+    \# Seed Nodes     & 1024 \\
+    \cmidrule(r){1-2} 
+    \multicolumn{2}{c}{\minsg}\\
+    \cmidrule(r){1-2} 
+    Sampling Strategy & 2-hop sage sampler~\cite{hamilton2017inductive} \\
+    \# Seed Nodes     & 1024 \\
+    Edge Drop Ratio   & 0.2 \\
+    Feature Mask Ratio& 0.2 \\
+    \cmidrule(r){1-2} 
+    \multicolumn{2}{c}{GNN encoder}\\
+    \cmidrule(r){1-2} 
+    Layer type        & GraphSAGE~\cite{hamilton2017inductive} \\
+    \# Layers         & 2 \\
+    Hidden Dimension  & [256, 256] \\
+    Activation        & ReLU \\
+    Batch Norm.       & No \\
+    Layer Norm.       & Yes \\
+    Optimizer         & AdamW with 1e-5 weight decay \\
+    Training Steps    & 10,000 \\
+    $\xi$ Stopping constant & 1e-5 \\
+    Learning Rate     & 5e-5 \\
+    \bottomrule 
+    \end{tabular}
+\end{table}
+
+
+\subsection{Appendix C.3: CNDP Q-learning hyperparameters}
+\label{app:q_learning_hyperparameters}
+
+
+To ensure a fair comparison, we train both MUSE-CN and FINDER on the same set of the hyperparameters recommended by \citet{fan2020finding} for Q-learning training of FINDER's optimization agent. These hyperparameters are listed in Table~\ref{tab:Q_learning_hyperparameters}.
+
+\begin{table}[H]
+    \centering
+    \caption{Hyperparameters for Q-learning Training of MUSE-CN and FINDER}
+    \label{tab:Q_learning_hyperparameters}
+    \begin{tabular}{l|c}
+    \toprule 
+    Hyperparam. & Value \\
+    \cmidrule(r){1-2} 
+    \multicolumn{2}{c}{DQN Algorithm}\\
+    \cmidrule(r){1-2} 
+    N-step TD learning & 5 \\
+    Discount factor $\gamma$ & 1.0 \\
+    Buffer capacity & 500,000 \\
+    Max episode length & 100 \\
+    Target network update frequency & 500 \\
+    \cmidrule(r){1-2} 
+    \multicolumn{2}{c}{Graph Encoder\tiny{(One for FINDER and multiple of same architecture for MUSE-CN)}}\\
+    \cmidrule(r){1-2} 
+    Embedding dimension & 256 \\
+    Activation & ReLU \\
+    Node features dim & 2 \\
+    Node features schema & [1.0, 1.0] \\
+    Message passing iterations & 3 \\
+    \cmidrule(r){1-2} 
+    \cmidrule(r){1-2} 
+    \multicolumn{2}{c}{MUSE-CN cross-attention\tiny{(per layer hyperparameters)}}\\
+    \cmidrule(r){1-2} 
+    Number of attention heads & 4 \\
+    Hidden dimension & 512 \\
+    Dropout & 0 \\
+    Use layer norm & Yes \\
+    Use residual connections & Yes \\
+    \cmidrule(r){1-2} 
+    \multicolumn{2}{c}{Q-Network Decoder}\\
+    \cmidrule(r){1-2} 
+    Input dimension & 256 \\
+    Hidden dimension & 64 \\
+    Activation & ReLU \\
+    Auxiliary input & Yes \\
+    Auxiliary dimension & 4 \\
+    \cmidrule(r){1-2} 
+    \multicolumn{2}{c}{Training}\\
+    \cmidrule(r){1-2} 
+    Optimizer & AdamW \\
+    Learning rate & 1e-4 \\
+    Weight decay & 5e-4 \\
+    Batch size & 128 \\
+    Training steps & 100,000 \\
+    Early stopping via validation & Yes \\
+    $\epsilon$ start & 1.0 \\
+    $\epsilon$ end & 0.05 \\
+    $\epsilon$ decay steps & 50,000 \\
+    \bottomrule 
+    \end{tabular}
+\end{table}
+
+\end{document}

@@ -1,104 +1,136 @@
 # MUSE-CN
-Repo for MUSE-CN: MUlti-encoder Self-supervised Expert for learning to identify Critical Nodes in large graphs
 
-## Instructions
+**MU**lti-encoder **S**elf-supervised **E**xpert for learning to identify **C**ritical
+**N**odes in large graphs.
 
-1. First recreate the conda environment: 
+MUSE-CN is a reinforcement-learning (DQN) agent for the **Critical Node Detection
+Problem (CNDP)**. It pairs a self-supervised, multi-encoder GraphSAGE backbone
+(five encoders, each pretrained on a different SSL task) with a cross-attention
+distillation module and a FINDER-style Q-value decoder. Nodes are removed
+autoregressively by descending Q-value.
+
+This repository is a standalone snapshot that reproduces the paper's results:
+the trained models, the pretrained backbone, all 35 benchmark instances, the code
+for pretraining / training / evaluation, and the recorded results.
+
+## Layout
+
 ```
-conda env create -f environment.yml
+run_inference.py            # main entry: evaluate models + baselines on any graph
+scalable_baselines.py       # scalable degree / HDA / CI heuristics (batched, sparse)
+main.py                     # DQN training entry
+Q_CNDP.py                   # the RL agent (build/train/evaluate rollout)
+py_modules/                 # models, encoders, layers, utils, baselines, curriculum
+cy_modules/                 # Cython graph/env/replay code (prebuilt .so for py3.9)
+exp_configs/                # training experiment configs
+
+pretraining_module/
+  pretrain_model.py, pretrain_utils/, general_pretraining.sh
+  SSL_models/SSL_v1_noProcAttr/     # the 5 pretrained encoders MUSE-CN loads (frozen)
+Data/
+  Data_benchmark/           # 31 small/medium instances (incl. PPI_1..4)
+  large_graphs/             # Enron, Epinions, Youtube, Flickr (web-scale)
+  SSL_data/                 # synthetic graph corpus for SSL pretraining
+
+experiments/MEGA_integration/       # 8 trained models (best checkpoint each)
+  ORIGINAL_BA_FINDER                            # FINDER (learning baseline)
+  MTSSL_MEGA_CrossAttention_1l_freeze_..._noProc  # MUSE-CN (headline model)
+  MTSSL_MEGA_{reset,finetune,freeze}_..._noProc   # pretraining-strategy ablations
+  MTSSL_MEGA_CrossAttention_{1l_finetune,2l,4l}_..._noProc  # cross-attention ablations
+
+results/
+  large_graph_runs/         # Enron/Epinions/Youtube/Flickr runs + results.csv (models + baselines)
+  benchmark_evals/          # small/medium benchmark ANC/NPC (10% budget)
+  manuscript_plots/
+docs/                       # method notes, scalable-inference notes, paper source
 ```
 
-2. The dependencies for MUSE-CN are: cython, pytorch, torch-geometric, numpy, pandas, scipy, networkx. 
+## Setup
 
-3. To perform  MT-SSL pretraining, run the following command:
+Python **3.9** (the Cython extensions in `cy_modules/*.so` are built for cpython-3.9).
 
+```bash
+conda create -n muse_cn python=3.9 && conda activate muse_cn
+# install a CUDA-matched PyTorch + PyTorch Geometric first (see pytorch.org / pyg docs)
+pip install -r requirements.txt
 ```
 
+The Cython extensions are prebuilt. If you need to rebuild them (e.g. different
+Python version):
+
+```bash
+python setup.py build_ext --inplace
+```
+
+## Evaluate
+
+`run_inference.py` loads a model (its best checkpoint), runs the autoregressive
+rollout, and writes ANC / NPC to `results/runs/<export>/results.csv`.
+It is crash-safe and resumable: each (model, graph) pair is checkpointed as soon
+as it finishes, and re-running the same command skips finished pairs.
+
+```bash
+# the two headline models on one small benchmark instance
+python run_inference.py --benchmark Bovine --suite focus --export demo
+
+# add the classical baselines
+python run_inference.py --benchmark USAir97 --suite focus \
+    --baselines degree HDA CI --export demo
+
+# a large / web-scale instance (memory-scalable chunked path auto-enables >100k nodes)
+python run_inference.py --new-graph Flickr \
+    --models MTSSL_MEGA_CrossAttention_1l_freeze_BA_FINDER_noProc \
+    --node-chunk 8000 --export flickr
+
+# full model suite on a benchmark graph
+python run_inference.py --benchmark Openflights --suite manuscript --export demo
+```
+
+Useful flags: `--suite {focus,manuscript}`, `--models <exp dirs...>`,
+`--baselines degree HDA CI`, `--budget-frac 0.1`, `--all-new-graphs`
+(every graph in `Data/large_graphs`, largest→smallest), `--node-chunk`,
+`--step-size`. Budget defaults to 10% of nodes.
+
+Model → paper mapping: `ORIGINAL_BA_FINDER` = FINDER;
+`MTSSL_MEGA_CrossAttention_1l_freeze_BA_FINDER_noProc` = MUSE-CN; the remaining
+six are the pretraining and cross-attention ablations.
+
+### Scalable inference / baselines
+
+Large instances (Youtube, Flickr) do not fit a naive forward pass. The chunked
+path (node-chunked decoder + cross-attention, sparse-matmul GraphSAGE
+aggregation) makes them fit while staying numerically identical to the original.
+`degree` / `HDA` / `CI` use batched, sparse implementations
+(`scalable_baselines.py`) so they also run at web scale. Note `HDA` and `CI` here
+are **adaptive** (scores are recomputed on the residual graph every `step_size`
+removals). See `docs/scalable_inference.md`.
+
+## Train
+
+DQN training (edit the experiment list at the top of `main.py`, which reads a
+config from `exp_configs/`):
+
+```bash
+python main.py
+```
+
+Each run writes to `experiments/<...>/`; evaluation picks the checkpoint with the
+lowest validation connectivity.
+
+## Pretrain the backbone
+
+The 5 SSL encoders are already trained and included
+(`pretraining_module/SSL_models/SSL_v1_noProcAttr/`). To retrain from the
+synthetic corpus (`Data/SSL_data/`):
+
+```bash
 cd pretraining_module
 bash general_pretraining.sh
 ```
 
-(optional) you can use `P_01_SSL_data_generator.ipynb` to generate custome synthetic datasets for pretraining.
+## Reproducing the numbers
 
-4. Make all the cython extensions needed for MUSE-CN:
-```
-python setup.py build_ext --inplace
-```
-
-5. The experiment configurations are stored in `exp_configs/`. You can run the experiments by selecting (or creating custome experiment configs) in `main.py` and running the following command to train the models:
-
-```
-python main.py
-```
-
-6. You can evalauted the trained models with the following command:
-
-```
-python eval_test.py
-```
-
-
-
-
-
-## Training models using exp_configs
-
-The project uses JSON configuration files (located in `exp_configs/`) to define training experiments. This section details the available configuration options and their usage.
-
-### Configuration File Structure
-
-Each experiment configuration file contains several key sections:
-
-1. **Basic Configuration**
-   - `exp_name`: Name of the experiment
-   - `export_path`: Directory to save experiment results
-   - `seed`: Random seed for reproducibility
-   - `device`: Training device ('cuda' or 'cpu')
-   - `use_wandb`: Enable/disable Weights & Biases logging
-
-2. **Model Configuration**
-   - `model_type`: Type of model to use
-     - `FINDER_DQN`: Standard DQN model
-   - `encoder_type`: Type of graph encoder
-     - `FINDER_encoder_PyG`: GraphSAGE encoder
-     - `identity`: Identity encoder
-     - `MEGA`: MEGA encoder
-   - `encoder_args`: Encoder-specific arguments
-     - `num_node_features`: Number of input node features
-     - `embedding_size`: Size of node embeddings
-   - `decoder_args`: Decoder-specific arguments
-
-3. **Training Algorithm Configuration**
-   - `RL_algorithm`: Choice of RL algorithm
-     - `DQN`: Deep Q-Network
-     - `MC`: Monte Carlo
-   - `RL_algorithm_args`: Algorithm-specific parameters
-     - `gamma`: Discount factor
-     - `n_steps`: Number of steps for n-step returns (DQN)
-     - `num_env`: Number of parallel environments
-     - `max_episode_length`: Maximum episode length
-
-4. **Feature Configuration**
-   - `procedural_attrs`: List of procedural node attributes
-     - `prone`: ProNE embeddings
-     - `ones`: One-hot features
-   - `procedural_attrs_args`: Arguments for procedural attributes
-   - `contextual_attrs`: List of contextual node attributes
-
-5. **Buffer & Optimization Configuration**
-   - `buffer_capacity`: Replay buffer size
-   - `optimizer`: Optimizer type (e.g., 'adam')
-   - `optimizer_args`: Optimizer parameters
-
-6. **Curriculum Learning Configuration**
-   - `curriculum`: List of training levels
-   Each level contains:
-   - `type`: Type of graphs ('synthetic', 'synthetic_diverse', 'real-world')
-   - `num_training_iters`: Number of training iterations
-   - `batch_size`: Training batch size
-   - `epsilon_start`, `epsilon_end`, `epsilon_step`: Exploration parameters
-   - `target_update_freq`: Target network update frequency (DQN)
-   - Graph generation parameters:
-     - For synthetic: `generator`, `min_n`, `max_n`, `args`
-     - For real-world: `edge_list_path`, `node_attributes_path`
-
+`results/large_graph_runs/results.csv` holds the recorded ANC values for the
+web-scale instances (models + baselines); `results/benchmark_evals/` holds the
+small/medium benchmark results. Example: Bovine MUSE-CN ANC = 14.32,
+Flickr MUSE-CN 32.63 vs FINDER 37.35.

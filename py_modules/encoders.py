@@ -12,8 +12,9 @@ from copy import deepcopy
 
 import torch_sparse
 
-def custom_global_add_pool(x, batch, batch_size):
+def custom_global_add_pool(x, batch, batch_size, dtype=torch.float):
     out = torch.zeros(batch_size, x.size(1)).to(x.device)
+    out = out.to(dtype)
     return out.scatter_add_(0, batch.unsqueeze(-1).repeat(1, x.size(1)), x)
 
 
@@ -167,7 +168,7 @@ class MEGA_Encoder(nn.Module):
             if curr_encoder_type == 'FINDER_encoder_PyG':
                 encoder = GraphSAGE_Encoder_PyG_FINDER_v2(**curr_encoder_args)
             
-            checkpoint = torch.load(encoder_config['model_file_path'])
+            checkpoint = torch.load(encoder_config['model_file_path'], map_location=torch.device('cpu'))
             encoder.load_state_dict(checkpoint)
             print("Successfully loaded pretrained encoder from: \n", encoder_config['model_file_path'])
             
@@ -210,12 +211,12 @@ class MEGA_Encoder(nn.Module):
             )
         else:
             raise ValueError(f"Invalid distilation type: {distilation_type}")
-    def forward(self, data):
+    def forward(self, data, dtype=torch.float):
         embeddings = []
         global_projs = []
         
         for encoder in self.encoders.values():
-            node_emb, global_proj = encoder(data)
+            node_emb, global_proj = encoder(data, dtype=dtype)
             embeddings.append(node_emb)
             global_projs.append(global_proj)
         
@@ -236,9 +237,52 @@ class MEGA_Encoder(nn.Module):
         # Normalize outputs
         final_embeddings = F.normalize(final_embeddings, p=2, dim=1)
         final_global = F.normalize(final_global, p=2, dim=1)
-        
+
         return final_embeddings, final_global
-    
+
+    def forward_chunked(self, data, node_chunk_size=20000, dtype=torch.float):
+        """Memory-scalable, numerically identical version of forward().
+
+        ADDITIVE. The encoder message passing (per encoder) is run full-graph as
+        usual — it only materializes [n, d] tensors. The distillation step is what
+        otherwise blows up: stacking 5 encoders gives [5, n, d] and the
+        cross-attention materializes Q/K/V of that size. Since distillation is
+        independent per node, we apply it in node chunks. Output == forward().
+        """
+        embeddings = []
+        global_projs = []
+        for encoder in self.encoders.values():
+            node_emb, global_proj = encoder(data, dtype=dtype)
+            embeddings.append(node_emb)        # each [n, d]
+            global_projs.append(global_proj)   # each [batch, d]
+
+        if self.distilation_type == 'mlp':
+            n = embeddings[0].shape[0]
+            finals = []
+            for s in range(0, n, node_chunk_size):
+                e = min(s + node_chunk_size, n)
+                xc = torch.cat([emb[s:e] for emb in embeddings], dim=1)  # [c, 5*d]
+                finals.append(self.distilation_module(xc))              # [c, d]
+            final_embeddings = torch.cat(finals, dim=0)
+            global_cat = torch.cat(global_projs, dim=1)
+            final_global = self.distilation_module(global_cat)
+        elif self.distilation_type == 'cross_attention':
+            n = embeddings[0].shape[0]
+            finals = []
+            for s in range(0, n, node_chunk_size):
+                e = min(s + node_chunk_size, n)
+                xc = torch.stack([emb[s:e] for emb in embeddings], dim=0)  # [5, c, d]
+                finals.append(self.distilation_module(xc))                # [c, d]
+            final_embeddings = torch.cat(finals, dim=0)
+            global_stack = torch.stack(global_projs, dim=0)               # [5, batch, d]
+            final_global = self.distilation_module(global_stack)
+        else:
+            raise ValueError(f"Invalid distilation type: {self.distilation_type}")
+
+        final_embeddings = F.normalize(final_embeddings, p=2, dim=1)
+        final_global = F.normalize(final_global, p=2, dim=1)
+        return final_embeddings, final_global
+
 
 class GraphSAGE_Encoder_PyG_FINDER_v2(nn.Module):
     def __init__(self, embedding_size=64, w_initialization_std=1, num_node_features=2, activation='relu', max_bp_iter=3, 
@@ -287,7 +331,7 @@ class GraphSAGE_Encoder_PyG_FINDER_v2(nn.Module):
     def get_device(self):
         return next(self.parameters()).device
 
-    def forward(self, data):
+    def forward(self, data, dtype=torch.float):
         edge_index = data['edge_index']
         batch = data['batch']
         x = data['node_input']
@@ -314,12 +358,13 @@ class GraphSAGE_Encoder_PyG_FINDER_v2(nn.Module):
 
         if(x is None):
             #[node_cnt, num_node_features]
-            x = torch.ones((nodes_cnt, self.num_node_features), dtype=torch.float)
+            x = torch.ones((nodes_cnt, self.num_node_features), dtype=dtype)
             # sent to deivde of a paramter
             x = x.to(self.get_device())
         
-        global_projection_input = torch.ones((batch_size, self.num_node_features), dtype=torch.float).to(self.get_device())
+        global_projection_input = torch.ones((batch_size, self.num_node_features), dtype=dtype).to(self.get_device())
 
+        # print("!!!!! set dtypes to : ", dtype)
         #print("Time taken for data preparation: ", time.time() - start_time)
         x = self.act(self.lin(x))
         x = nn.functional.normalize(x, p=2, dim=1)
@@ -337,7 +382,7 @@ class GraphSAGE_Encoder_PyG_FINDER_v2(nn.Module):
             x_agg_lin = self.conv(x, edge_index)
             #print("lv: ", lv, "AVG node_linear: ", torch.mean(x_agg_lin))
             
-            global_pool = custom_global_add_pool(x, batch, batch_size)
+            global_pool = custom_global_add_pool(x, batch, batch_size, dtype=dtype)
             #weird, but FINDER!
             global_lin = self.conv.lin(global_pool)
             #print("lv: ", lv, "AVG global_linear: ", torch.mean(global_lin))
@@ -394,7 +439,7 @@ class RandomEncoder(nn.Module):
         # Convert values to a torch tensor
         x = torch.tensor(x, dtype=torch.float32)
 
-        global_projection = custom_global_add_pool(x, batch, batch_size)
+        global_projection = custom_global_add_pool(x, batch, batch_size, dtype=torch.float)
         
         return x, global_projection
     
@@ -415,7 +460,7 @@ class IdentityEncoder(nn.Module):
             x = torch.ones((nodes_cnt, self.num_node_features), dtype=torch.float)
             x = x.to(self.get_device())
 
-        global_projection = custom_global_add_pool(x, batch, batch_size)
+        global_projection = custom_global_add_pool(x, batch, batch_size, dtype=torch.float)
 
         return x, global_projection
 

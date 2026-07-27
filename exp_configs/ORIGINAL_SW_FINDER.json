@@ -1,0 +1,75 @@
+{
+    "export_path": "experiments/DQN/FINDER/ORIGINAL_SW_FINDER",
+    "overwrite": true,
+    "exp_name": "DQN_FINDER",
+    "RL_algorithm": "DQN",
+    "RL_algorithm_args": {
+        "n_steps": 5,
+        "gamma": 1,
+        "epsilon": 1e-7,
+        "alpha": 0.6,
+        "beta": 0.4,
+        "beta_increment_per_sampling": 0.001,
+        "TD_err_upper": 1.0,
+        "num_env": 1,
+        "max_episode_length": 100
+    },
+    "model_type": "finder_dqn",
+    "encoder_type": "FINDER_encoder_PyG",
+    "encoder_args": {
+            "embedding_size": 128,
+            "activation": "relu",
+            "weight_init": true,
+            "num_node_features": 2,
+            "max_bp_iter": 3,
+            "inner_conv_normalize": false
+    },
+    "decoder_args": {
+        "activation": "relu",
+        "reg_hidden": 32,
+        "auxilary_input": true,
+        "aux_dim": 4,
+        "w_initialization_std": 0.01
+    },
+    "procedural_attrs": [],
+    "optimizer": "adam",
+    "optimizer_args": {
+        "lr": 0.0001,
+        "weight_decay": 0.0005
+    },
+    "reward_function": "cndp",
+    "buffer_capacity": 500000,
+    "model_export_frequency": 1000,
+    "curriculum": [
+            {
+                "type": "synthetic",
+                "generator": "newman_watts_strogatz_graph",
+                "min_n": 50,
+                "max_n": 70,
+                "args": {"k": 7, "p": 0.2},
+                "num_graphs": 200,
+                "num_episodes": 10,
+                "epsilon_start": 1,
+                "epsilon_end": 0.05,
+                "epsilon_step": 10000,
+                "target_update_freq": 500,
+                "num_training_iters": 100001,
+                "batch_size": 128,
+                "num_valid": 2
+            }
+
+    ]
+    ,
+    "use_wandb": false,
+    "device": "cuda",
+    "seed": 424242,
+    "aggregatorID": 0,
+    "SSL_losses": [
+        "recon_loss"
+    ],
+    "SSL_loss_args": {
+        "recon_loss": {
+            "alpha": 0.001
+        }
+    }
+}

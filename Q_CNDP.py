@@ -7,6 +7,8 @@ import random
 import time
 import gc
 from tqdm import tqdm
+import traceback
+
 import cy_modules.PrepareBatchGraph as PrepareBatchGraph
 import cy_modules.graph as graph
 import cy_modules.nstep_replay_mem as nstep_replay_mem
@@ -27,7 +29,7 @@ from datetime import datetime
 
 
 
-def setup_logger(export_path): 
+def setup_logger(export_path): # issue with the logger getting closed in MoE experiments
     """Set up logging to both file and stdout with append mode"""
     logger_name = 'Q_CNDP'
     logger = logging.getLogger(logger_name)
@@ -77,6 +79,9 @@ class Q_CNDP_Agent:
 
         # Core training parameters
         self.device = config.get('device', torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+        self.dtype = config.get('dtype', torch.float32) # Default to float32
+        print("SELF.DTYPE: ", self.dtype)
+        self.logger.info(f"Using dtype: {self.dtype}")
         self.logger.info(f"Device: {self.device}")
         self.seed = config['seed']
         self.use_wandb = config['use_wandb']
@@ -87,22 +92,28 @@ class Q_CNDP_Agent:
         
         # Model configuration
         self.model_type = config['model_type']
+        self.is_MoE = False
 
 
+        if 'MoE' in self.model_type:
+            self.is_MoE = True
+            self.experts_args = config['experts_args']
+            self.encoder_args = {'num_node_features': 2}
 
-        config['pretrained_encoder'] = config.get('pretrained_encoder', None)
-
-        if(config['pretrained_encoder'] is None):
-            self.pretrained_encoder = False
-            self.encoder_type = config['encoder_type']
-            self.encoder_args = config['encoder_args']
         else:
-            self.pretrained_encoder = True
-            self.pretrained_encoder_vars = config['pretrained_encoder']
-            with open(config['pretrained_encoder']['config_file_path'], 'r') as f:
-                config_vars = json.load(f)
-            self.encoder_type = config_vars['encoder_type']
-            self.encoder_args = config_vars['encoder_args']
+            config['pretrained_encoder'] = config.get('pretrained_encoder', None)
+
+            if(config['pretrained_encoder'] is None):
+                self.pretrained_encoder = False
+                self.encoder_type = config['encoder_type']
+                self.encoder_args = config['encoder_args']
+            else:
+                self.pretrained_encoder = True
+                self.pretrained_encoder_vars = config['pretrained_encoder']
+                with open(config['pretrained_encoder']['config_file_path'], 'r') as f:
+                    config_vars = json.load(f)
+                self.encoder_type = config_vars['encoder_type']
+                self.encoder_args = config_vars['encoder_args']
 
         self.decoder_args = config['decoder_args']
         
@@ -193,25 +204,45 @@ class Q_CNDP_Agent:
         self.setup_envs()
         torch.set_num_threads(16)
 
+        if self.is_MoE:
+            self.DQN = get_model(self.model_type, encoder_type=None, encoder_args={}, decoder_args=self.decoder_args, seed=self.seed,\
+                        pretrained_encoder_path=None, pretrained_encoder_load_mode=None,
+                        experts_args=self.experts_args)
+            
+            print("MoE model created, number of experts: ", len(self.experts_args['experts']))
+            print("Number of parameters in MoE model: ", sum(p.numel() for p in self.DQN.parameters()))
         
-        if self.pretrained_encoder:
-            self.DQN = get_model(self.model_type, self.encoder_type, self.encoder_args, self.decoder_args, self.seed,\
-                self.pretrained_encoder_vars['model_file_path'], self.pretrained_encoder_vars.get('load_mode', 'freeze'))
         else:
-            self.DQN = get_model(self.model_type, self.encoder_type, self.encoder_args, self.decoder_args, self.seed)
+            if self.pretrained_encoder:
+                self.DQN = get_model(self.model_type, self.encoder_type, self.encoder_args, self.decoder_args, self.seed,\
+                    self.pretrained_encoder_vars['model_file_path'], self.pretrained_encoder_vars.get('load_mode', 'freeze'))
+            else:
+                self.DQN = get_model(self.model_type, self.encoder_type, self.encoder_args, self.decoder_args, self.seed)
         self.DQN.to(self.device)
-        self.logger.info(f"Created model: {self.model_type}")
+        self.DQN = self.DQN.to(dtype=self.dtype)
+        self.logger.info(f"Model {self.model_type} initialized and moved to {self.device} with dtype {self.dtype}")
+
+        if self.pretrained_encoder and self.pretrained_encoder_vars.get('model_path', None) and 'MoE' not in self.model_type:
+            self.logger.info(f"Attempting to load pretrained model weights for the main DQN from {self.pretrained_encoder_vars.get('model_path')}")
+            self.DQN.load_state_dict(torch.load(self.pretrained_encoder_vars.get('model_path'), map_location=self.device))
 
         if(self.RL_algorithm == 'DQN'):
             self.logger.info("Creating target model...")
-            if self.pretrained_encoder:
-                # shouldn't matter because we take snapshot, but just keeping it in
-                self.DQN_T = get_model(self.model_type, self.encoder_type, self.encoder_args, self.decoder_args, self.seed,\
-                    self.pretrained_encoder_vars['model_file_path'], self.pretrained_encoder_vars.get('load_mode', 'freeze')) # shouldn't matter freeze or finetune but keeping it in for now. 
-            else:
-                self.DQN_T = get_model(self.model_type, self.encoder_type, self.encoder_args, self.decoder_args, self.seed)
+
+            if self.is_MoE:
+                self.DQN_T = deepcopy(self.DQN)
+
+
+            else: 
+                if self.pretrained_encoder:
+                    # shouldn't matter because we take snapshot, but just keeping it in
+                    self.DQN_T = get_model(self.model_type, self.encoder_type, self.encoder_args, self.decoder_args, self.seed,\
+                        self.pretrained_encoder_vars['model_file_path'], self.pretrained_encoder_vars.get('load_mode', 'freeze')) # shouldn't matter freeze or finetune but keeping it in for now. 
+                else:
+                    self.DQN_T = get_model(self.model_type, self.encoder_type, self.encoder_args, self.decoder_args, self.seed)
             self.DQN_T.to(self.device)
-            self.logger.info(f"Created target model: {self.model_type}")
+            self.DQN_T = self.DQN_T.to(dtype=self.dtype)
+            self.logger.info(f"Target model {self.model_type} initialized and moved to {self.device} with dtype {self.dtype}")
             self.TakeSnapShot()
 
         self.optimizer = get_optimizer(self.DQN, self.optimizer_type, self.optimizer_args)
@@ -878,9 +909,9 @@ class Q_CNDP_Agent:
             data, idx_map_list = self.SetupPyGAll(batch_idxes, g_list, covered, train=False)
             #Node input is NONE for not costed scnario
             if isSnapSnot:
-                result = self.DQN_T.test_forward(data, return_embedding)
+                result = self.DQN_T.test_forward(data, return_embedding, dtype=self.dtype)
             else:
-                result = self.DQN.test_forward(data, return_embedding)
+                result = self.DQN.test_forward(data, return_embedding, dtype=self.dtype)
             # TOFIX: line below used to be raw_output = result[0]. This is weird because results is supposed to be 
             # [node_cnt, 1] (Q-values per node). And indeed it resulted in an error! I have fixed it by the line below
             # look inito it later.
@@ -929,6 +960,53 @@ class Q_CNDP_Agent:
     def predict_with_current_qnet(self,g_list,covered, batch_size=1, return_embedding=False):
         result = self.predict(g_list, covered, batch_size=batch_size, isSnapSnot=False, return_embedding=return_embedding)
         return result
+
+    def predict_chunked(self, g_list, covered, node_chunk_size=20000, return_embedding=False):
+        """Memory-scalable inference for very large graphs (ADDITIVE).
+
+        Mirrors `predict` (batch_size=1) but calls the current Q-net's
+        `test_forward_chunked`, which evaluates the cross-attention distillation
+        and the decoder outer-product in node chunks. Numerically identical to
+        `predict_with_current_qnet` — only the peak memory differs.
+        """
+        n_graphs = len(g_list)
+        pred = []
+        final_embeddings = [] if return_embedding else None
+        for i in range(n_graphs):
+            batch_idxes = np.int32([i])
+            data, idx_map_list = self.SetupPyGAll(batch_idxes, g_list, covered, train=False)
+            result = self.DQN.test_forward_chunked(
+                data, return_embedding=return_embedding, dtype=self.dtype,
+                node_chunk_size=node_chunk_size)
+            if return_embedding:
+                result, embeddings = result
+                embeddings = embeddings.cpu().detach().numpy()
+            raw_output = result[:, 0].cpu().detach().numpy()
+            idx_map = idx_map_list[0]
+            cur_pred = np.zeros(len(idx_map))
+            if return_embedding:
+                cur_embedding = np.zeros((len(idx_map), embeddings.shape[1]))
+            pos = 0
+            for k in range(len(idx_map)):
+                if idx_map[k] < 0:
+                    cur_pred[k] = -self.inf
+                else:
+                    cur_pred[k] = raw_output[pos]
+                    if return_embedding:
+                        cur_embedding[k] = embeddings[pos]
+                    pos += 1
+            for k in covered[i]:
+                cur_pred[k] = -self.inf
+            pred.append(cur_pred)
+            if return_embedding:
+                final_embeddings.append(cur_embedding)
+            del data, result
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        if return_embedding:
+            return pred, np.array(final_embeddings)
+        return pred
 
     def test_on_gid(self, gid: int):
         g_list = []
@@ -1019,6 +1097,10 @@ class Q_CNDP_Agent:
 
 
         data['node_input'] = prepareBatchGraph.node_attributes.to(self.device)
+
+        #update dtype
+        data['node_input'] = data['node_input'].type(self.dtype)
+        data['aux_input'] = data['aux_input'].type(self.dtype)
         if data['node_input'].shape == torch.Size([0]):
             assert not self.contextual_attrs 
             assert not self.procedural_attrs
@@ -1122,7 +1204,104 @@ class Q_CNDP_Agent:
             scores = {i: scores[i] for i in range(len(scores))}
             return scores
 
-    def calc_solution_nx(self, g, budget, step_size=1, node_attributes=None, print_progress = False):
+    def calc_solution_nx_chunked(self, g, budget, step_size=1, node_chunk_size=20000,
+                                 node_attributes=None, print_progress=False):
+        """Memory-scalable rollout for very large graphs (ADDITIVE).
+
+        Identical autoregressive node-removal loop as `calc_solution_nx`, but scores
+        nodes with `predict_chunked` (chunked cross-attention + decoder) so graphs
+        with millions of nodes fit in memory. Output is the same solution
+        `calc_solution_nx` would produce for the same step_size.
+        """
+        import psutil
+        process = psutil.Process()
+        budget = int(budget)
+        print(f"[chunked] node_chunk_size={node_chunk_size} step_size={step_size}")
+        print(f"Initial memory usage: {process.memory_info().rss/1024/1024:.2f} MB")
+
+        g_cy = self.GenCyNetwork(g, node_attributes=node_attributes)
+        self.InsertGraph(g_cy, is_test=True)
+        g_list = []
+        self.test_env.s0(self.TestSet.Get(0))
+
+        if print_progress:
+            pbar = tqdm(total=budget, desc="Removing nodes (chunked)")
+
+        removed_nodes = []
+        self.DQN.eval()
+        # Enable memory-scalable sparse-matmul aggregation in every SAGE conv so
+        # the encoder does not materialize a [num_edges, dim] message tensor
+        # (which OOMs on million-edge graphs). Numerically identical sum-agg.
+        n_spmm = 0
+        for m in self.DQN.modules():
+            if type(m).__name__ == 'CustomSAGEConv':
+                m.use_spmm_aggr = True
+                n_spmm += 1
+        print(f"[chunked] enabled spmm aggregation on {n_spmm} SAGE conv layers")
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        print(f"Graph size: {g.number_of_nodes()} nodes, {g.number_of_edges()} edges")
+        print(f"Target budget: {budget} nodes")
+
+        try:
+            with torch.no_grad():
+                processed_count = 0
+                while len(removed_nodes) < budget:
+                    if self.test_env.isTerminal():
+                        break
+                    if self.procedural_attrs:
+                        self.test_env.graph.set_procedural_attributes(
+                            self.procedural_attrs, self.procedural_attrs_args, covered=removed_nodes)
+                    g_list.append(self.test_env.graph)
+                    scores = self.predict_chunked(
+                        g_list, [self.test_env.action_list],
+                        node_chunk_size=node_chunk_size, return_embedding=False)
+                    scores = scores[0]
+                    top_nodes = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:step_size]
+                    for node in top_nodes:
+                        if node not in removed_nodes:
+                            removed_nodes.append(node)
+                            self.test_env.stepWithoutReward(node)
+                            if print_progress:
+                                pbar.update(1)
+                    g_list.clear()
+                    processed_count += 1
+                    if processed_count % 5 == 0:
+                        gc.collect()
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+        except Exception as e:
+            self.logger.error(f"Error during chunked node removal: {str(e)}")
+            if print_progress:
+                pbar.close()
+            print(f"Completed {len(removed_nodes)}/{budget} nodes before error")
+            traceback.print_exc()
+            self.ClearTestGraphs()
+            # Propagate CUDA OOM so the caller can fall back to CPU; only swallow
+            # other errors (returning partial progress).
+            if isinstance(e, RuntimeError) and "out of memory" in str(e).lower():
+                raise
+            return removed_nodes
+
+        self.DQN.train()
+        if print_progress:
+            pbar.close()
+        print(f"Final memory usage: {process.memory_info().rss/1024/1024:.2f} MB")
+        self.ClearTestGraphs()
+        return removed_nodes
+
+    def calc_solution_nx(self, g, budget, step_size=1, node_attributes=None, print_progress=False):
+        # Add memory monitoring
+        import psutil
+        process = psutil.Process()
+
+        budget = int(budget)
+        
+        # Log initial memory usage
+        initial_mem = process.memory_info().rss / 1024 / 1024
+        print(f"Initial memory usage: {initial_mem:.2f} MB")
+        
         g_cy = self.GenCyNetwork(g, node_attributes=node_attributes)
         self.InsertGraph(g_cy, is_test=True)
         g_list = []
@@ -1132,34 +1311,85 @@ class Q_CNDP_Agent:
             pbar = tqdm(total=budget, desc="Removing nodes")
 
         removed_nodes = []
-        while len(removed_nodes) < budget:
-            if self.test_env.isTerminal():
-                break
-                
-            if self.procedural_attrs:
-                self.test_env.graph.set_procedural_attributes(self.procedural_attrs, self.procedural_attrs_args, covered=removed_nodes)
-            
-            g_list.append(self.test_env.graph)
-            scores = self.predict_with_current_qnet(g_list, [self.test_env.action_list], return_embedding=False)
-            scores = scores[0]
-            
-            # Get the top step_size scored nodes
-            top_nodes = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:step_size]
-            
-            # Remove the top nodes from the graph and add them to removed_nodes
-            for node in top_nodes:
-                if node not in removed_nodes:
-                    removed_nodes.append(node)
-                    self.test_env.stepWithoutReward(node)
-                    if print_progress:
-                        pbar.update(1)
-
-            
-            # Clear the g_list for the next iteration
-            g_list.clear()
+        # set model to eval mode
+        self.DQN.eval()
+        
+        # Force garbage collection before starting
+        gc.collect()
+        torch.cuda.empty_cache()  # If using GPU
+        
+        # Log graph size information
+        print(f"Graph size: {g.number_of_nodes()} nodes, {g.number_of_edges()} edges")
+        print(f"Target budget: {budget} nodes")
+        
+        try:
+            with torch.no_grad():
+                processed_count = 0
+                while len(removed_nodes) < budget:
+                    if self.test_env.isTerminal():
+                        break
+                    
+                    # if processed_count % 10 == 0:  # Log memory every 10 iterations
+                    #     current_mem = process.memory_info().rss / 1024 / 1024
+                    #     print(f"Memory after {processed_count} nodes: {current_mem:.2f} MB")
+                    
+                    if self.procedural_attrs:
+                        self.test_env.graph.set_procedural_attributes(self.procedural_attrs, self.procedural_attrs_args, covered=removed_nodes)
+                    
+                    g_list.append(self.test_env.graph)
+                    
+                    # Try to catch out-of-memory issues during prediction
+                    try:
+                        scores = self.predict_with_current_qnet(g_list, [self.test_env.action_list], return_embedding=False)
+                        scores = scores[0]
+                    except RuntimeError as e:
+                        print("Runtime error: ", e)
+                        traceback.print_exc()
+                        if "out of memory" in str(e):
+                            self.logger.error(f"OOM during prediction after {len(removed_nodes)} nodes")
+                            if torch.cuda.is_available():
+                                print(f"GPU memory: {torch.cuda.memory_allocated()/1024/1024:.2f} MB allocated, {torch.cuda.memory_reserved()/1024/1024:.2f} MB reserved")
+                        raise e
+                    
+                    # Get the top step_size scored nodes
+                    top_nodes = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:step_size]
+                    
+                    # Remove the top nodes from the graph and add them to removed_nodes
+                    for node in top_nodes:
+                        if node not in removed_nodes:
+                            removed_nodes.append(node)
+                            self.test_env.stepWithoutReward(node)
+                            if print_progress:
+                                pbar.update(1)
+                    
+                    # Clear the g_list for the next iteration
+                    g_list.clear()
+                    
+                    # Force garbage collection periodically
+                    processed_count += 1
+                    if processed_count % 50 == 0:
+                        gc.collect()
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+        except Exception as e:
+            self.logger.error(f"Error during node removal: {str(e)}")
+            # Log final state before exiting
+            if print_progress:
+                pbar.close()
+            print(f"Completed {len(removed_nodes)}/{budget} nodes before error")
+            # print stack
+            traceback.print_exc()
+            self.ClearTestGraphs()
+            return removed_nodes
+                    
+        # set model to train mode
+        self.DQN.train()
 
         if print_progress:
             pbar.close()
+        
+        final_mem = process.memory_info().rss / 1024 / 1024
+        print(f"Final memory usage: {final_mem:.2f} MB (change: {final_mem-initial_mem:.2f} MB)")
         
         self.ClearTestGraphs()
         return removed_nodes

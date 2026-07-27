@@ -1,0 +1,24 @@
+# MUSE-CN dependencies.
+# Target: Python 3.9 (the bundled Cython extensions in cy_modules/*.so are built
+# for cpython-3.9). We ran everything in a conda env with a CUDA-enabled build of
+# PyTorch + PyTorch Geometric on a single RTX 4090.
+#
+# Install PyTorch / PyG first, matched to your CUDA version (see pytorch.org and
+# the pyg install docs), then the rest.
+
+torch
+torch_geometric
+torch_sparse
+torch_scatter
+dgl                 # only needed for SSL pretraining (GraphSAINT sampler)
+
+networkx
+numpy
+scipy
+scikit-learn
+pandas
+tqdm
+
+# training-only extras (evaluation does not need these)
+wandb
+memory_profiler

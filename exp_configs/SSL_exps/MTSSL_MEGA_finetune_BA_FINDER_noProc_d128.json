@@ -1,0 +1,109 @@
+{
+    "export_path": "experiments/MEGA_integration/MTSSL_MEGA_finetune_BA_FINDER_noProc_d128",
+    "overwrite": true,
+    "exp_name": "DQN_FINDER",
+    "RL_algorithm": "DQN",
+    "RL_algorithm_args": {
+        "n_steps": 5,
+        "gamma": 1,
+        "epsilon": 1e-7,
+        "alpha": 0.6,
+        "beta": 0.4,
+        "beta_increment_per_sampling": 0.001,
+        "TD_err_upper": 1.0,
+        "num_env": 1,
+        "max_episode_length": 100
+    },
+    "model_type": "finder_dqn",
+    "encoder_type": "MEGA",
+    "encoder_args": {
+            "encoders_list":{
+                "p_link" : {
+                    "config_file_path": "pretraining_module/SSL_models/SSL_v1_noProcAttr_d128/seed_42_tasks_p_link/checkpoint/best_model/NODE_MODULE_config.json",
+                    "model_file_path": "pretraining_module/SSL_models/SSL_v1_noProcAttr_d128/seed_42_tasks_p_link/checkpoint/best_model/node_module.pth.tar",
+                    "load_mode": "finetune"
+                },
+                "p_recon" : {
+                    "config_file_path": "pretraining_module/SSL_models/SSL_v1_noProcAttr_d128/seed_42_tasks_p_recon/checkpoint/best_model/NODE_MODULE_config.json",
+                    "model_file_path": "pretraining_module/SSL_models/SSL_v1_noProcAttr_d128/seed_42_tasks_p_recon/checkpoint/best_model/node_module.pth.tar",
+                    "load_mode": "finetune"
+                },
+                "p_ming" : {
+                    "config_file_path": "pretraining_module/SSL_models/SSL_v1_noProcAttr_d128/seed_42_tasks_p_ming/checkpoint/best_model/NODE_MODULE_config.json",
+                    "model_file_path": "pretraining_module/SSL_models/SSL_v1_noProcAttr_d128/seed_42_tasks_p_ming/checkpoint/best_model/node_module.pth.tar",
+                    "load_mode": "finetune"
+                },
+                "p_minsg" : {
+                    "config_file_path": "pretraining_module/SSL_models/SSL_v1_noProcAttr_d128/seed_42_tasks_p_minsg/checkpoint/best_model/NODE_MODULE_config.json",
+                    "model_file_path": "pretraining_module/SSL_models/SSL_v1_noProcAttr_d128/seed_42_tasks_p_minsg/checkpoint/best_model/node_module.pth.tar",
+                    "load_mode": "finetune"
+                },
+                "p_decor" : {
+                    "config_file_path": "pretraining_module/SSL_models/SSL_v1_noProcAttr_d128/seed_42_tasks_p_decor/checkpoint/best_model/NODE_MODULE_config.json",
+                    "model_file_path": "pretraining_module/SSL_models/SSL_v1_noProcAttr_d128/seed_42_tasks_p_decor/checkpoint/best_model/node_module.pth.tar",
+                    "load_mode": "finetune"
+                }
+            },
+            "distilation_module_args":{
+                "distilation_layers": [384, 256],
+                "activation": "prelu",
+                "distilation_type": "mlp"
+            }, 
+            "embedding_size": 128
+    },
+    "decoder_args": {
+        "activation": "relu",
+        "reg_hidden": 64,
+        "auxilary_input": true,
+        "aux_dim": 4,
+        "w_initialization_std": 0.01
+    },
+    "procedural_attrs": [
+        "ones"
+    ],
+    "procedural_attrs_args": {
+        "ones": {
+            "num_features": 2
+        }
+    },
+    "optimizer": "adam",
+    "optimizer_args": {
+        "lr": 0.0001,
+        "weight_decay": 0.0005
+    },
+    "reward_function": "cndp",
+    "buffer_capacity": 500000,
+    "model_export_frequency": 1000,
+    "curriculum": [
+        {
+            "type": "synthetic",
+            "generator": "barabasi_albert_graph",
+            "min_n": 50,
+            "max_n": 70,
+            "args": {"m": 4},
+            "num_graphs": 200,
+            "num_episodes": 10,
+            "epsilon_start": 1,
+            "epsilon_end": 0.05,
+            "epsilon_step": 10000,
+            "target_update_freq": 500,
+            "num_training_iters": 100001,
+            "batch_size": 128,
+            "num_valid": 2
+        }
+
+    ]
+    ,
+    "use_wandb": false,
+    "device": "cuda",
+    "seed": 424242,
+    "aggregatorID": 0,
+    "SSL_losses": [
+        "recon_loss"
+    ],
+    "SSL_loss_args": {
+        "recon_loss": {
+            "alpha": 0.001
+        }
+    }
+}
